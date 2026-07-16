@@ -1,6 +1,6 @@
 # 第10章 Layout 布局系统（修正版）
 
-> 本文是对原文的精炼总结，并对照 UGUI 源码修正了原文中的 4 处错误。
+> 本文是对原文的精炼总结，并对照 UGUI 源码修正了原文中的 6 处错误。
 
 ---
 
@@ -330,46 +330,53 @@ public class CircleLayoutGroup : LayoutGroup
     [SerializeField] private float radius = 200f;
     [SerializeField] private float startAngle = 0f;
 
+    private float centerX, centerY, angleStep;
+    private int count;
+
     public override void CalculateLayoutInputHorizontal()
     {
         base.CalculateLayoutInputHorizontal();
+        count = rectChildren.Count;
+        if (count == 0) return;
+        centerX = rectTransform.rect.width * 0.5f;
+        angleStep = 360f / count;
     }
 
-    public override void CalculateLayoutInputVertical() { }
+    public override void CalculateLayoutInputVertical()
+    {
+        if (count == 0) return;
+        centerY = rectTransform.rect.height * 0.5f;
+    }
 
     public override void SetLayoutHorizontal()
     {
-        ArrangeChildren();
-    }
-
-    public override void SetLayoutVertical()
-    {
-        ArrangeChildren();
-    }
-
-    private void ArrangeChildren()
-    {
-        int count = rectChildren.Count;
-        if (count == 0) return;
-
-        float angleStep = 360f / count;
-
+        // 仅计算水平方向，避免与 SetLayoutVertical 重复计算
         for (int i = 0; i < count; i++)
         {
             RectTransform child = rectChildren[i];
             float angle = (startAngle + angleStep * i) * Mathf.Deg2Rad;
-            float x = Mathf.Cos(angle) * radius;
-            float y = Mathf.Sin(angle) * radius;
+            float x = centerX + Mathf.Cos(angle) * radius - child.rect.width * 0.5f;
+            SetChildAlongAxis(child, 0, x, child.rect.width);
+        }
+    }
 
-            // 将子元素定位，使其中心落在圆周上
-            SetChildAlongAxis(child, 0, x - child.rect.width * 0.5f, child.rect.width);
-            SetChildAlongAxis(child, 1, -y - child.rect.height * 0.5f, child.rect.height);
+    public override void SetLayoutVertical()
+    {
+        for (int i = 0; i < count; i++)
+        {
+            RectTransform child = rectChildren[i];
+            float angle = (startAngle + angleStep * i) * Mathf.Deg2Rad;
+            float y = centerY - Mathf.Sin(angle) * radius - child.rect.height * 0.5f;
+            SetChildAlongAxis(child, 1, y, child.rect.height);
         }
     }
 }
 ```
 
-关键点：不是直接操作 `Transform.position`，而是通过 `SetChildAlongAxis()` 在 RectTransform 布局体系中修改 UI，保证仍然属于 Layout 系统的一部分。
+关键点：
+- 不是直接操作 `Transform.position`，而是通过 `SetChildAlongAxis()` 在 RectTransform 布局体系中修改 UI
+- `SetChildAlongAxis` 的 `pos` 参数相对于父容器左/上边界，而三角函数算出的坐标相对于父容器中心，因此必须加上 `centerX`/`centerY` 偏移
+- 水平和垂直计算拆入各自的 `SetLayout` 方法，利用 LayoutRebuilder 先水平、后垂直的两轮调用顺序，避免在同一个方法中重复计算两个方向
 
 ### 10.6.5 自定义布局的本质
 
@@ -506,3 +513,5 @@ ScrollRect（视图窗口：Content 位移 + Viewport 裁剪）
 | 2 | 🟡 中等 | 10.3.1 | ContentSizeFitter "读取当前节点上的 Layout 尺寸信息" | ContentSizeFitter 通过 `LayoutUtility` 实时遍历 ILayoutElement 计算尺寸，不是"读取已有信息" |
 | 3 | 🟡 中等 | 10.4.6 | "某些 LayoutGroup 会自动强制修改 Anchor" | UGUI 内置 LayoutGroup 和 ContentSizeFitter 都不修改 Anchor，仅通过 `SetChildAlongAxis()` 修改 `anchoredPosition` 和 `sizeDelta` |
 | 4 | 🟢 轻微 | 10.2.3 | "内部通常会维护一个 rectChildren 列表" | rectChildren 是 LayoutGroup 的 protected 属性，通过 `GetRectChildren()` 每帧刷新，用"通常会维护"描述过于模糊 |
+| 5 | 🟡 中等 | 10.6.4 | 环形布局代码中 `SetChildAlongAxis` 直接使用 `x` 和 `-y` 作为位置 | 三角函数算出的坐标相对于父容器中心，而 `SetChildAlongAxis` 的 `pos` 参数相对于父容器左/上边界，缺失 `centerX`/`centerY` 偏移，导致圆环定位到容器左上角附近 |
+| 6 | 🟡 中等 | 10.6.4 | `SetLayoutHorizontal()` 和 `SetLayoutVertical()` 都调用同一个 `ArrangeChildren()` 全量计算 | LayoutRebuilder 分两轮先后调用这两个方法，每次全量计算意味着每帧多算了一遍；应将水平和垂直计算分别放入各自方法中，复用已计算的公共数据（角度、圆心坐标等） |
