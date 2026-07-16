@@ -166,18 +166,100 @@ public void RaycastAll(PointerEventData eventData, List<RaycastResult> raycastRe
 
 EventSystem 不自己做检测——它遍历所有 Raycaster，每个 Raycaster 各自检测，最后统一排序。
 
-### 11.2.3 BaseRaycaster 继承结构
+### 11.2.3 三种 Raycaster 的实现机制
+
+虽然都实现统一的 `Raycast()` 抽象方法，但三种 Raycaster 的底层检测方式完全不同：
+
+| | GraphicRaycaster | PhysicsRaycaster | Physics2DRaycaster |
+|------|------|------|------|
+| 检测对象 | Graphic（RectTransform） | Collider（3D） | Collider2D |
+| 检测方式 | 屏幕坐标 + 矩形包含判断 | 从屏幕点发射 3D 射线，`Physics.RaycastAll` | 从屏幕点发射 2D 射线，`Physics2D.GetRayIntersectionAll` |
+| 需要 Camera | 仅 Camera/World 模式需要 | 必须（用 `camera.ScreenPointToRay`） | 必须 |
+| 核心方法 | `RectangleContainsScreenPoint` | `Physics.RaycastAll` | `Physics2D.GetRayIntersectionAll` |
+| 排序依据 | Graphic.depth | 射线距离（distance） | 射线距离 |
+
+**PhysicsRaycaster 的大致逻辑：**
+
+```csharp
+// 从屏幕坐标发射真正的 3D 射线
+Ray ray = eventCamera.ScreenPointToRay(eventData.position);
+var hits = Physics.RaycastAll(ray, maxDistance, layerMask);
+
+foreach (var hit in hits)
+{
+    resultAppendList.Add(new RaycastResult {
+        gameObject = hit.collider.gameObject,
+        module = this,
+        distance = hit.distance,
+        // ...
+    });
+}
+```
+
+只有 GraphicRaycaster 是"屏幕矩形判断"——PhysicsRaycaster 和 Physics2DRaycaster 都在发射真正的物理射线。EventSystem 通过 `RaycasterManager` 统一调度，三者的结果是合并到一起再统一排序的。
+
+**继承结构：**
 
 ```
 BaseRaycaster
-  ├── GraphicRaycaster       （UI 命中检测）
-  └── PhysicsRaycaster       （3D 碰撞体）
-       └── Physics2DRaycaster（2D 碰撞体，继承自 PhysicsRaycaster）
+├── GraphicRaycaster       （UI 命中检测）
+└── PhysicsRaycaster       （3D 碰撞体）
+     └── Physics2DRaycaster（2D 碰撞体，继承自 PhysicsRaycaster）
 ```
 
-所有 Raycaster 都实现统一的 `Raycast()` 接口，EventSystem 可以统一调度不同类型的命中检测。
+### 11.2.4 GraphicRaycaster 检测流程——与 Graphic.Raycast() 的关系
 
-### 11.2.4 GraphicRaycaster 检测流程
+这里容易混淆，因为有两个同名方法：
+
+- **`GraphicRaycaster.Raycast()`**：Raycaster 层面的检测入口，遍历 Graphic 列表 → 矩形判断 → 排序
+- **`Graphic.Raycast()`**：单个 Graphic 身上的虚方法，用于附加过滤（Alpha Hit Test 等）
+
+前者调用后者，每个 Graphic 经过两步筛选才能命中：
+
+```
+步骤 1：矩形检测（GraphicRaycaster 负责）
+  RectTransformUtility.RectangleContainsScreenPoint(rect, pos, camera)
+  → 屏幕坐标是否在 RectTransform 矩形区域内？
+
+步骤 2：Graphic 自身额外过滤（Graphic 虚方法负责）
+  graphic.Raycast(sp, camera)
+  → 矩形命中了，但 Graphic 自己说"不算"就不算
+```
+
+`Graphic.Raycast()` 的默认实现直接 return true，只有特定子类重写：
+
+```csharp
+// Graphic 基类默认实现
+public virtual bool Raycast(Vector2 sp, Camera eventCamera)
+{
+    return true;  // 矩形命中就算
+}
+
+// Image 重写（开启 AlphaHitTestMinimumThreshold 时）
+public override bool Raycast(Vector2 sp, Camera eventCamera)
+{
+    // 检测点击位置像素的 Alpha 是否大于阈值
+    // 透明像素返回 false，不响应点击
+}
+```
+
+**完整调用层级关系：**
+
+```
+EventSystem.RaycastAll()
+  └─ RaycasterManager.GetRaycasters()          ← 全局统一调度
+       ├─ GraphicRaycaster.Raycast()            ← BaseRaycaster 接口实现
+       │    ├─ RectangleContainsScreenPoint()   ← 屏幕矩形检测
+       │    └─ graphic.Raycast()                ← Graphic 虚方法（附加过滤）
+       ├─ PhysicsRaycaster.Raycast()            ← BaseRaycaster 接口实现
+       │    └─ Physics.RaycastAll()             ← 发射真正的 3D 射线
+       └─ Physics2DRaycaster.Raycast()          ← BaseRaycaster 接口实现
+            └─ Physics2D.GetRayIntersectionAll()← 发射真正的 2D 射线
+```
+
+### 11.2.5 GraphicRaycaster 过滤流程
+
+具体的过滤与命中检测步骤：
 
 ```
 GraphicRegistry.GetGraphicsForCanvas(canvas)   ← 获取当前 Canvas 所有 Graphic
