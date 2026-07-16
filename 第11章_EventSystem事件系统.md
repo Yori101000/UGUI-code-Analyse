@@ -1,6 +1,6 @@
 # 第11章 EventSystem 事件系统（修正版）
 
-> 本文是对原文的精炼总结，并对照 UGUI 源码修正了原文中的 4 处错误。
+> 本文是对原文的精炼总结，并对照 UGUI 源码修正了原文中的 5 处错误。
 
 ---
 
@@ -170,9 +170,9 @@ EventSystem 不自己做检测——它遍历所有 Raycaster，每个 Raycaster
 
 ```
 BaseRaycaster
-  ├── GraphicRaycaster      （UI 命中检测）
-  ├── PhysicsRaycaster      （3D 碰撞体）
-  └── Physics2DRaycaster    （2D 碰撞体）
+  ├── GraphicRaycaster       （UI 命中检测）
+  └── PhysicsRaycaster       （3D 碰撞体）
+       └── Physics2DRaycaster（2D 碰撞体，继承自 PhysicsRaycaster）
 ```
 
 所有 Raycaster 都实现统一的 `Raycast()` 接口，EventSystem 可以统一调度不同类型的命中检测。
@@ -470,3 +470,4 @@ EventSystem 是 UGUI 的"输入中间层"——将输入采集、空间检测与
 | 2 | 🟡 中等 | 11.6.10 | "Graphic.Raycast 内部还会检测 Mask、RectMask2D、CanvasGroup" | Mask/RectMask2D 裁剪判断在 GraphicRaycaster.Raycast() 主流程中，不在 Graphic.Raycast() 内部 |
 | 3 | 🟢 轻微 | 11.3.11 / 11.2.9 | 只给出 `IsPointerOverGameObject()` 无参用法 | 无参版本仅检测 PointerId=-1（鼠标左键），移动端/多键场景需传 pointerId 参数 |
 | 4 | 🟢 轻微 | 11.7.1 / 11.7.13 | 旧系统"轮询" vs 新系统"事件驱动"的二分对立 | 旧系统同样只在 Process() 中按需读取；两者差异在抽象层级，非运行模式二分 |
+| 5 | 🟢 轻微 | 11.2.3 | 继承结构写为 `BaseRaycaster → PhysicsRaycaster` 和 `BaseRaycaster → Physics2DRaycaster` 平级 | `Physics2DRaycaster` 继承自 `PhysicsRaycaster`，非直接继承 `BaseRaycaster` |
