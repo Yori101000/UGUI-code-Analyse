@@ -280,7 +280,66 @@ GraphicRegistry.GetGraphicsForCanvas(canvas)   ← 获取当前 Canvas 所有 Gr
 
 ### 11.2.6 RaycastTarget 优化
 
-每个 Graphic 都有 `raycastTarget` 属性（默认 true）。纯装饰性的 Text、Image **必须关闭**——否则它们会参与每帧 Raycast 遍历、阻挡下层按钮、增加 CPU 开销。
+### 11.2.7 RaycastTarget 属性详解
+
+`raycastTarget` 是 `Graphic` 类上的一个 `[SerializeField]` 属性，默认值为 `true`：
+
+```csharp
+// Graphic.cs
+[SerializeField]
+private bool m_RaycastTarget = true;
+
+public bool raycastTarget
+{
+    get => m_RaycastTarget;
+    set
+    {
+        m_RaycastTarget = value;
+        SetVerticesDirty();  // 修改后会触发重建
+    }
+}
+```
+
+**所有 Graphic 子类都有这个属性**：Image、Text（旧版）、RawImage、MaskableGraphic 等。TMP_Text 虽然没有继承 Graphic，但它有独立的 `raycastTarget`。
+
+**GraphicRaycaster 中的过滤代码**（前面流程中已列出）：
+
+```csharp
+if (!graphic.raycastTarget)
+    continue;  // 直接跳过，不参与命中检测
+```
+
+**三种操作方式：**
+
+1. **Inspector 面板**：选中 Image/Text/RawImage 组件，在 Inspector 最底部有一个 `Raycast Target` 复选框，取消勾选即可。这是最常用的方式。
+
+2. **代码手动设置**：
+```csharp
+GetComponent<Image>().raycastTarget = false;
+```
+
+3. **运行时批量清理**：复杂 UI 中，一个 Prefab 里可能有几十个装饰性 Text。可以通过脚本在 `Awake()` 或编辑器中统一关闭：
+```csharp
+// 递归关闭某个节点下所有 Graphic 的 raycastTarget
+void DisableRaycastOnChildren(Transform parent)
+{
+    foreach (var graphic in parent.GetComponentsInChildren<Graphic>())
+        graphic.raycastTarget = false;
+}
+```
+
+**哪些该关：**
+
+| 关掉 | 保留 |
+|------|------|
+| 纯装饰背景 Image | 可点击的 Button |
+| 标签/说明文字 Text | 需要拖拽的 Slider |
+| 仅用于布局的占位 Graphic | 需要悬停检测的 Hover 区域 |
+| ScrollView 内容区的缩略图 | InputField 本身 |
+
+**为什么 Text 是重灾区**：聊天气泡、任务列表、背包物品名——这些 Text 如果 Canvas 下有上百个且全部开着 `raycastTarget`，鼠标每动一像素就要遍历这上百个做矩形检测。而且 Text 通常覆盖在 Button 上，开着还会阻挡 Button 的点击事件穿透到父级。
+
+> 注意：关闭 `raycastTarget` 只影响事件检测，不影响渲染——UI 照样显示，只是"不参与点击"。
 
 ### 11.2.7 排序规则
 
