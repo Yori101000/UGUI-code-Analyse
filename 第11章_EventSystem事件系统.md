@@ -225,7 +225,7 @@ GraphicRegistry.GetGraphicsForCanvas(canvas)   ← 从缓存获取当前 Canvas 
   │
   ├─ 过滤 1：depth == -1        → 跳过（未参与渲染）
   ├─ 过滤 2：raycastTarget == false → 跳过（不接收射线）
-  ├─ 过滤 3：canvasRenderer.cull → 跳过（已被 RectMask2D / Mask 裁剪）
+  ├─ 过滤 3：canvasRenderer.cull → 跳过（被 RectMask2D 完全剔除的元素，Mask 不设置此标志）
   │
   ├─ 矩形检测：RectTransformUtility.RectangleContainsScreenPoint()
   │    → 鼠标屏幕坐标是否在 RectTransform 矩形区域内？
@@ -237,6 +237,8 @@ GraphicRegistry.GetGraphicsForCanvas(canvas)   ← 从缓存获取当前 Canvas 
   │
   └─ 生成 RaycastResult 列表并返回
 ```
+
+> **关于 Mask 与 Raycast 的重要说明**：Mask 的裁剪通过 GPU Stencil Buffer 实现，发生在渲染的片元阶段——它只控制像素是否写入帧缓冲，完全不碰 `canvasRenderer.cull`。因此 **Mask 隐藏的子 UI 元素视觉上不可见，但仍然能被点击检测到**。GraphicRaycaster 只认 RectTransform 的矩形范围，不知道 Stencil 裁剪了哪些像素。这和 RectMask2D 不同——RectMask2D 对完全在裁剪区域外的元素会设置 `canvasRenderer.cull = true`，从而同时实现"不可见 + 不可点击"。需要 Mask 的裁剪形状也能阻挡点击时，要用 `ICanvasRaycastFilter` 做自定义过滤。
 
 ### 11.3.5 两个 "Raycast" 的区别（重要）
 
