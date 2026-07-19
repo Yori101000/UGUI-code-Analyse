@@ -22,125 +22,153 @@ UGUI 提供两种裁剪机制：
 
 ## 13.1 Mask：基于 Stencil Buffer 的裁剪
 
-### 13.1.1 Mask 的组件结构
+> 如果你已经理解 UGUI 渲染管线（第 9 章：Graphic → CanvasRenderer → Canvas.BuildBatch → GPU），这一节可以在已有知识上直接建立 Mask 的心智模型。
 
-一个有效的 Mask 需要两个部分在**同一个 GameObject** 上：
+### 13.1.0 从一个具体问题出发
+
+你在 Unity 里给一个 GameObject 挂上 Mask 组件，子节点是一张超出父节点边界的图片。运行后，超出部分看不到了。
+
+Mask 既不砍顶点（对比 RectMask2D 干掉整个元素的顶点），也不改布局。它做的是更底层的事：**在 GPU 里给每个像素打标记，后续渲染子节点时检查这个标记——标记不对的像素直接扔掉。**
+
+要理解这个过程，首先得知道 GPU 里有一块叫 Stencil Buffer 的东西。
+
+### 13.1.1 Stencil Buffer：GPU 给你的草稿纸
+
+GPU 渲染时维护着几块"画布"，每块画布的每个像素位置都存着数据：
+
+| 画布 | 每个像素存什么 | 用途 |
+|------|-------------|------|
+| Color Buffer | RGBA 颜色值 | 最终显示在屏幕上的画面 |
+| Depth Buffer | 深度值（离相机多远） | 判断哪个物体在前面 |
+| **Stencil Buffer** | 一个整数（0-255） | **你想存什么就存什么，GPU 不关心含义** |
+
+**Stencil Buffer 就是 GPU 给你的一张草稿纸。** 每个像素对应一个格子，你可以往格子里写数字，之后读这个数字来做判断。它不影响颜色，不影响深度——纯粹给你做标记用的。
+
+类比你用一张镂空卡片盖在纸上画画：只往镂空的地方涂色，被卡片挡住的地方不涂。Stencil Buffer 就是这张卡片——但不是物理盖住，而是每画一笔之前，GPU 先检查"这个像素在我的标记范围内吗？"。
+
+### 13.1.2 Mask 需要两个组件在同一个 GameObject 上
 
 ```
 GameObject (带 Mask)
-  ├── Mask 组件          ← 控制器：修改材质参数
-  └── Image 组件         ← 渲染器：实际绘制 + 写入 Stencil（提供遮罩形状）
+  ├── Mask 组件          ← 控制器：修改自己和子节点的材质
+  └── Image 组件         ← 渲染器：实际绘制遮罩形状 + 写入 Stencil 标记
 ```
 
-**Mask 组件本身不渲染任何像素。** 没有 Graphic（Image/RawImage）的 Mask 组件是无效的——它不会产生任何视觉效果。Mask 的遮罩形状由同 GameObject 上 Graphic 的渲染内容决定（包括其 Alpha 通道——这就是为什么圆形图片可以做出圆形遮罩）。
+**Mask 组件本身不渲染任何像素。** 渲染遮罩形状的是同 GameObject 上的 Graphic（通常是 Image）。Mask 组件做的是：在这两个组件（自己和子节点）渲染之前，替换它们用的材质。
 
-Mask 组件做的事情：重写同 GameObject 上 Graphic 的 `GetModifiedMaterial()`，在返回的材质中注入 Stencil 写入操作。
+遮罩形状由 Image 的 Alpha 通道决定——圆形图片的圆形区域不透明→写 Stencil，四个角透明→不写 Stencil。这就是为什么圆形图片能做出圆形遮罩。没有 Graphic 的 Mask 是无效的（没有形状可渲染，就没有东西写 Stencil）。
 
-### 13.1.2 IMaskable：Mask 如何影响子节点
+### 13.1.3 核心机制：先写标记，再检查
 
-**这是原文完全缺失的一环。** 挂上 Mask 组件后，子节点的材质为什么会自动变？
+Mask 的工作分两步，按 GPU 实际执行顺序来理解。
 
-答案在 `IMaskable` 接口：
+#### 阶段一：渲染 Mask 本体 → 顺便写标记
 
-```csharp
-// Graphic 基类实现了 IMaskable
-public interface IMaskable
-{
-    void RecalculateMasking();  // Mask 状态变化时被调用
-}
+Mask 上的 Image 走正常的渲染流程：Graphic.OnPopulateMesh() → CanvasRenderer.SetMesh() → Canvas.BuildBatch() → 提交 GPU。
+
+但在 GPU 渲染这个 Image 时，它的材质已经被 Mask 替换成特殊版本，带了这样一条指令：
+
+> **"画这个像素的同时，往 Stencil Buffer 的同一位置写一个 1。"**
+
+执行过程（在 GPU 片元着色器之后）：
+
+```
+片段着色器输出 Image 像素颜色
+  → Stencil 测试：Always（始终通过，不检查旧值）
+    → Stencil 操作：Replace（把参考值 1 写入 Stencil Buffer 对应位置）
+      → 颜色写入：正常输出到 Color Buffer
 ```
 
-整个传播链路：
+Image 渲染完成后：
+- Color Buffer 里有了 Image 的颜色（`showMaskGraphic = true` 能看到；`false` 它全透明但标记照样写了）
+- **Stencil Buffer 里，Image 不透明像素覆盖的位置被标记为 1，透明像素位置还是 0**
+
+#### 阶段二：渲染子节点 → 检查标记
+
+Mask 下面的子节点（Button、Text、各种 Image）开始渲染。它们的材质也被 Mask 替换成另一个特殊版本：
+
+> **"画这个像素之前，先检查 Stencil Buffer 同一位置的值是不是 1。是 → 正常画。不是 → 丢弃。"**
+
+执行过程：
+
+```
+片段着色器输出子节点像素颜色
+  → Stencil 测试：Equal（要求 Stencil 值 == 参考值 1）
+    → 通过 → 写入 Color Buffer（可见 ✅）
+    → 失败 → 丢弃片元（不可见 ❌）
+```
+
+结果：子节点像素位置 Stencil=1（被 Mask Image 覆盖过）→ 正常显示。Stencil=0（在 Mask Image 范围外）→ GPU 扔掉了，屏幕上看不到。
+
+### 13.1.4 一个具体帧的完整例子
+
+假设场景结构：
+```
+Mask（挂 Mask 组件 + 圆形 Alpha 图）
+  └── Background（Image，一张大地图）
+```
+
+这一帧发生了什么：
+
+1. **Canvas 收集**需要渲染的 Graphic：Mask 上的 Image、子节点 Background Image
+2. **Canvas 排序**：Mask Image 先渲染，Background 后渲染（同一层级下按深度排列）
+3. **渲染 Mask Image**：片元着色器输出每个像素颜色 → Stencil Replace，圆形区域内 Stencil 写为 1，圆形外透明像素不写 → Stencil 保持 0 → 正常输出颜色到 Color Buffer（如果 showMaskGraphic=true）
+4. **渲染 Background**：片元着色器算出每个像素颜色 → Stencil Equal 测试 → 圆形区域内 Stencil=1 通过，写入 Color Buffer → 圆形外 Stencil=0 失败，丢弃
+5. **最终屏幕**：Background 只在圆形区域内可见
+
+### 13.1.5 Mask 组件在 CPU 侧具体做了什么
+
+上面讲的是 GPU 行为。Mask 组件在 CPU 侧做了三件事来让这一切发生：
+
+#### ① 通知子节点"你被遮罩了"
 
 ```
 Mask.OnEnable() / OnDisable() / OnTransformParentChanged()
   → MaskUtilities.NotifyStencilStateChanged(this)
     → 遍历 transform 子树中所有实现 IMaskable 的组件
-      → 对每个 IMaskable 调用 RecalculateMasking()
-        → 子 Graphic 的 GetModifiedMaterial() 被重新调用
-          → 返回注入了 Stencil 测试的材质（来自 StencilMaterial.Add()）
+      → 每个 IMaskable.RecalculateMasking()
+        → 子 Graphic 内部标记"遮罩状态变了，我需要新材质"
 ```
 
-**Mask 的作用范围精确遵循 Transform 层级。** `MaskUtilities.GetStencilDepth()` 通过遍历 `transform.parent` 向上查找 Mask 祖先来计算当前元素处于第几层 Mask 嵌套——这是纯粹的 Transform 树逻辑，不是"Canvas 渲染层级"决定的。
+`IMaskable` 是 Mask 和子节点之间的通信接口。Image、Text、RawImage 都实现了它。
 
-### 13.1.3 Stencil Buffer 机制：写入与测试
+#### ② 替换自己的材质（Mask 本体）→ 注入"写入 Stencil"指令
 
-Stencil Buffer 是 GPU 的一块逐像素缓冲区（通常 8 位），与颜色缓冲、深度缓冲并列。每个像素位置存储一个整数值，供后续渲染做条件判断。
-
-Mask 的裁剪分两个阶段，**都发生在 GPU 片元着色器之后**：
-
-**阶段一：Mask 自身渲染 → 写入 Stencil 标记**
-
-Mask GameObject 上的 Image 渲染时，其材质已被 `Mask.GetModifiedMaterial()` 修改为"写入 Stencil"模式：
-
-```
-片段着色器输出颜色
-  → Stencil 测试：Always（始终通过，不检查之前的值）
-    → Stencil 操作：Replace（将参考值写入 Stencil Buffer）
-      → 颜色写入：正常输出颜色到帧缓冲
-```
-
-结果：Image 的**不透明像素**覆盖区域在 Stencil Buffer 中被标记为参考值（如 1）。Image 的透明区域不写入 Stencil——这就是为什么遮罩形状由 Image 的 Alpha 决定。
-
-**阶段二：子节点渲染 → 测试 Stencil 标记**
-
-子节点的 Graphic 渲染时，其材质已被修改为"测试 Stencil"模式：
-
-```
-片段着色器输出颜色
-  → Stencil 测试：Equal（只允许 Stencil 值 == 参考值的像素通过）
-    → 通过 → 写入颜色缓冲（可见）
-    → 失败 → 丢弃片元（不可见）
-```
-
-结果：只有当像素位置的 Stencil 值等于 Mask 写入的参考值时，子节点的颜色才被写入帧缓冲。这就形成了"只在遮罩区域内可见"的效果。
-
-### 13.1.4 StencilMaterial.Add()：材质的 Stencil 注入
-
-UGUI 通过 `StencilMaterial.Add()` 创建带 Stencil 配置的材质实例：
+Mask 重写了同 GameObject 上 Graphic 的 `GetModifiedMaterial()`。当这个 Graphic 要渲染时，拿到的不是默认 UI 材质，而是 `StencilMaterial.Add()` 生成的新材质：
 
 ```csharp
-// Mask 自身: 写入 Stencil
-Material maskMaterial = StencilMaterial.Add(
-    baseMaterial,              // 原始材质（如 Default UI Material）
-    (1 << stencilDepth) - 1,   // 参考值（基于嵌套深度计算）
-    StencilOp.Replace,         // 写入操作：直接替换
-    CompareFunction.Always,    // 测试函数：始终通过
-    ColorWriteMask.All         // 同时正常输出颜色
+// Mask 自身用的是"写入 Stencil"材质
+StencilMaterial.Add(
+    baseMaterial,            // 原始材质（Default UI Material）
+    stencilRef,              // 要写入的参考值（如 1）
+    StencilOp.Replace,       // 写入操作：替换
+    CompareFunction.Always,  // 测试：始终通过
+    ColorWriteMask.All       // 正常输出颜色
 );
+```
 
-// 子节点: 测试 Stencil
-Material childMaterial = StencilMaterial.Add(
-    baseMaterial,              // 原始材质
-    (1 << stencilDepth) - 1,   // 参考值（与父 Mask 相同）
-    StencilOp.Keep,            // 不修改 Stencil Buffer
-    CompareFunction.Equal,     // 测试：只允许 Stencil == ref 的像素通过
+#### ③ 替换子节点的材质 → 注入"测试 Stencil"指令
+
+通过 IMaskable → MaskUtilities 链路，子 Graphic 的 `GetModifiedMaterial()` 被重新调用，返回另一个 `StencilMaterial.Add()` 生成的材质：
+
+```csharp
+// 子节点用的是"测试 Stencil"材质
+StencilMaterial.Add(
+    baseMaterial,            // 原始材质
+    stencilRef,              // 测试参考值（与父 Mask 写入的值相同）
+    StencilOp.Keep,          // 不修改 Stencil Buffer
+    CompareFunction.Equal,   // 测试：只有 Stencil == ref 才通过
     ColorWriteMask.All
 );
 ```
 
-**注意**：`StencilMaterial.Add()` 每次调用都会创建新的材质实例——即使传入了相同的参数。这意味着不同 Mask 层级有不同的材质实例 → 无法合批。
+#### Mask 的作用范围：Transform 层级决定
 
-`MaskUtilities.GetStencilDepth()` 计算嵌套深度：
+`MaskUtilities.GetStencilDepth(transform, stopAfter)` 通过遍历 `transform.parent` 向上查找 Mask 祖先来计算嵌套深度。这是纯粹的 Transform 树逻辑，不是"Canvas 渲染层级"——原文此处有严重错误。
 
-```csharp
-// 向上遍历 transform.parent，统计遇到的 Mask 组件数量
-public static int GetStencilDepth(Transform transform, Transform stopAfter)
-{
-    int depth = 0;
-    while (transform != stopAfter && transform != null)
-    {
-        if (transform.GetComponent<Mask>() != null)
-            ++depth;
-        transform = transform.parent;
-    }
-    return depth;
-}
-```
+### 13.1.6 嵌套 Mask
 
-### 13.1.5 嵌套 Mask
-
-Mask 可以嵌套：
+Mask 可以嵌套。每次嵌套，深度 +1，Stencil 参考值随之变化：
 
 ```
 Mask A（深度 1，写 ref=1，子节点测 ref=1）
@@ -148,9 +176,29 @@ Mask A（深度 1，写 ref=1，子节点测 ref=1）
        └── Image C（测 ref=3 → 必须同时通过 A 和 B 的裁剪区域）
 ```
 
-¹ 注：UGUI 实际使用 `(1 << depth) - 1` 计算 Stencil ref，`depth=1 → ref=1`，`depth=2 → ref=3`。这是位掩码编码——具体细节由 `StencilMaterial.Add()` 的 `stencilID` 参数决定，各 Unity 版本可能有所不同。
+¹ `(1 << depth) - 1` 计算 Stencil ref：depth=1 → ref=1，depth=2 → ref=3。这是位掩码编码，具体由 `StencilMaterial.Add()` 的 `stencilID` 参数决定，各 Unity 版本可能有所不同。
+
+嵌套的效果：**每一层都在收紧条件——Image C 最终只显示在 A ∩ B 的交集区域。**
 
 每层嵌套至少创建一个新的材质实例 → Stencil 状态不同 → 打断合批。
+
+### 13.1.7 为什么 Mask 会打断合批（以及为什么 RectMask2D 不会）
+
+UGUI 合批的条件是"使用完全相同的 Material 实例"（同一个 C# 对象引用，不是"相似的"材质）。`StencilMaterial.Add()` 每次调用都生成新实例。
+
+一个嵌套 Mask UI 的 Batch 分裂示例：
+
+```
+正常 UI（默认材质，实例 M0）→ Batch 1
+Mask A 的 Image（Stencil Replace ref=1，新实例 M1）→ Batch 2
+  Mask A 子 UI（Stencil Equal ref=1，新实例 M2）→ Batch 3
+  Mask B 的 Image（Stencil Replace ref=3，新实例 M3）→ Batch 4
+    Mask B 子 UI（Stencil Equal ref=3，新实例 M4）→ Batch 5
+```
+
+原本可能 2 个 Batch 的 UI，嵌套 Mask 变成 5 个。**Mask 的性能代价主要在合批破坏，不在 Stencil 读写本身。**
+
+而 RectMask2D 完全不修改材质——它通过 CanvasRenderer 的裁剪矩形实现，材质不变 → 可以合批。这是两者最本质的差异。
 
 ---
 
