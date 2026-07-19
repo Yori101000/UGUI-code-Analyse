@@ -162,16 +162,20 @@ RectMask2D **完全不经过 Stencil**。它的裁剪分为两个阶段：
 
 **CPU 端 —— ClipperRegistry.Cull()**：
 
-在 Canvas 重建阶段，RectMask2D 计算自身 RectTransform 的**屏幕空间矩形**。对于每个受其影响的子 Graphic：
+在 Canvas 重建阶段，RectMask2D 计算自身 RectTransform 的**屏幕空间矩形**。对于每个受其影响的子 Graphic（它们都实现了 `IClippable` 接口）：
 
-- **Graphic 完全在矩形外** → 剔除：`CanvasRenderer.cull = true`，不提交顶点数据
-- **Graphic 与矩形有交集** → 设置裁剪矩形：`CanvasRenderer.SetClipRect(clipRect, true)`
+- **Graphic 完全在矩形外** → 调用 `IClippable.Cull()` → 内部设置 `canvasRenderer.cull = true`，不提交顶点数据
+- **Graphic 与矩形有交集** → 调用 `IClippable.SetClipRect()` → 内部调用 `canvasRenderer.EnableRectClipping(clipRect)`
+
+> **关键**：RectMask2D 并不直接操作 CanvasRenderer，而是通过 `IClippable` 接口与子 Graphic（继承自 `MaskableGraphic`）通信。`MaskableGraphic` 实现了 `IClippable.SetClipRect()` 和 `IClippable.Cull()`，在其内部才真正调用 CanvasRenderer 的对应方法。这一层间接关系使裁剪逻辑与 Graphic 的材质管理（Stencil 状态）保持一致。
 
 **GPU 端**：
 
 被设置了裁剪矩形的 Graphic，GPU 在光栅化阶段只在矩形范围内输出片元。具体实现取决于图形后端——可能映射为 scissor rect 或 shader 中的 clip 指令。
 
 ### 13.2.2 关键代码逻辑
+
+RectMask2D 维护的 `m_ClipTargets` 是 `List<IClippable>`，不是 CanvasRenderer 列表。裁剪操作通过接口调用传递：
 
 ```csharp
 // RectMask2D.PerformClipping() 的核心逻辑（简化）
@@ -181,16 +185,46 @@ private void PerformClipping()
     
     for (int i = 0; i < m_ClipTargets.Count; ++i)
     {
-        Rect targetBounds = /* Graphic 的包围盒 */;
+        IClippable target = m_ClipTargets[i];
+        Rect targetBounds = /* target 的包围盒 */;
         
-        // 完全在裁剪区域外 → 剔除
-        if (!clipRect.Overlaps(targetBounds))
-            m_ClipTargets[i].canvasRenderer.cull = true;
+        bool cull = !clipRect.Overlaps(targetBounds);
+        if (cull)
+            target.Cull(clipRect, true);       // IClippable.Cull() → canvasRenderer.cull = true
         else
-            // 部分在裁剪区域内 → 设置裁剪矩形
-            m_ClipTargets[i].canvasRenderer.SetClipRect(clipRect, true);
+            target.SetClipRect(clipRect, true); // IClippable.SetClipRect() → canvasRenderer.EnableRectClipping(clipRect)
     }
 }
+```
+
+`IClippable` 由 `MaskableGraphic` 实现（Image、Text 等都继承自它）：
+
+```csharp
+// MaskableGraphic 内部的 IClippable 实现
+public virtual void SetClipRect(Rect value, bool validRect)
+{
+    if (validRect)
+        canvasRenderer.EnableRectClipping(value);   // 生效：启用矩形裁剪
+    else
+        canvasRenderer.DisableRectClipping();       // 禁用：恢复完整渲染
+}
+
+public virtual void Cull(Rect clipRect, bool validRect)
+{
+    bool cull = !validRect || /* 包围盒与 clipRect 无交集 */;
+    canvasRenderer.cull = cull;  // 完全在裁剪区域外 → 不提交顶点
+}
+```
+
+**总结调用链**：
+
+```
+RectMask2D.PerformClipping()
+  → IClippable.Cull(clipRect, true)         // 完全在外：剔除顶点
+       → canvasRenderer.cull = true
+  
+  → IClippable.SetClipRect(clipRect, true)  // 有交集：限制像素输出
+       → canvasRenderer.EnableRectClipping(clipRect)
 ```
 
 ### 13.2.3 与 Mask 的本质区别
