@@ -184,21 +184,24 @@ Mask A（深度 1，写 ref=1，子节点测 ref=1）
 
 ### 13.1.7 为什么 Mask 会打断合批（以及为什么 RectMask2D 不会）
 
-UGUI 合批的条件是"使用完全相同的 Material 实例"（同一个 C# 对象引用，不是"相似的"材质）。`StencilMaterial.Add()` 每次调用都生成新实例。
+UGUI 合批的条件是"使用完全相同的 Material 实例"（同一个 C# 对象引用，不是"相似的"材质）。
 
-一个嵌套 Mask UI 的 Batch 分裂示例：
+**`StencilMaterial.Add()` 有内部缓存**——它用 `(baseMaterial, stencilID, operation, compareFunction, colorWriteMask, readMask, writeMask)` 做 key。相同参数第二次调用时直接返回缓存中的实例，**不会重复创建**。因此同一 Mask 层级下的所有子 Graphic（Stencil 参数完全相同）共享同一个材质实例，**它们之间仍然可以合批**。
+
+Mask 断批的真正原因不在"每个 Graphic 一个实例"，而在"不同 Mask 层级的 Stencil 参数不同"：
 
 ```
-正常 UI（默认材质，实例 M0）→ Batch 1
-Mask A 的 Image（Stencil Replace ref=1，新实例 M1）→ Batch 2
-  Mask A 子 UI（Stencil Equal ref=1，新实例 M2）→ Batch 3
-  Mask B 的 Image（Stencil Replace ref=3，新实例 M3）→ Batch 4
-    Mask B 子 UI（Stencil Equal ref=3，新实例 M4）→ Batch 5
+正常 UI（默认材质实例）                    → Batch 1
+Mask A 自己的 Image（Replace ref=1）       → Batch 2（材质实例 ≠ Batch 1）
+  |── 100 个子 Graphic（Equal ref=1）      → Batch 3（共享同一个实例，内部可以合批 ✅）
+  |
+  Mask B 自己的 Image（Replace ref=3）     → Batch 4（材质实例 ≠ Batch 3）
+     |── 50 个子 Graphic（Equal ref=3）    → Batch 5（共享同一个实例，内部可以合批 ✅）
 ```
 
-原本可能 2 个 Batch 的 UI，嵌套 Mask 变成 5 个。**Mask 的性能代价主要在合批破坏，不在 Stencil 读写本身。**
+**关键结论**：Mask 增加的 Batch 数 = 不同 Stencil 参数组合的数量（嵌套深度 × 2），不是子 Graphic 的数量。一层 Mask 把 Batch 从 1 变成 3（自身 + 子节点群 + 外部 UI），但子节点群内部 100 个元素仍然可以共享 1 个 Batch。
 
-而 RectMask2D 完全不修改材质——它通过 CanvasRenderer 的裁剪矩形实现，材质不变 → 可以合批。这是两者最本质的差异。
+而 RectMask2D 完全不修改材质——它通过 CanvasRenderer 的裁剪矩形实现，所有 Graphic 保持原始材质实例不变 → 可以跨裁剪边界合批。这是两者最本质的差异。
 
 ---
 
@@ -332,16 +335,18 @@ RectMask2D.PerformClipping()
 
 ### 13.3.1 Mask 为什么必然打断合批
 
-合批的前提是**相同的 Material 实例**。`StencilMaterial.Add()` 为每个不同的 Stencil 状态（参考值、比较函数、写入操作）创建新的材质实例。
+合批的前提是**相同的 Material 实例**。`StencilMaterial.Add()` 内部有缓存：**相同 Stencil 参数返回同一实例，不同参数才创建新实例。**
 
 ```
-一个 Mask = 至少 1 个新材质实例（Mask 自身 Image 用）
-N 层嵌套 Mask = N 个不同 Stencil 状态的材质实例
+Mask 自身 Image（Replace + ref=N）    → 1 个新材质实例
+Mask 所有直属子 Graphic（Equal + ref=N）→ 1 个新材质实例（但共享，内部可合批）
+N 层嵌套 Mask                         → 2N 个不同 Stencil 参数组合的材质实例
 
 结论：
-  → Mask 内外的 UI 使用不同材质 → 无法合批
-  → 不同深度的 Mask 使用不同材质 → 彼此也无法合批
-  → 即使使用相同的原始材质和纹理，只要 Stencil 参数不同就分属不同 Batch
+  → Mask 内外的 UI 使用不同材质 → 无法跨边界合批
+  → 不同深度的 Mask 有不同的 ref → 彼此无法合批
+  → 同一深度内的子 Graphic 共享材质 → 可以合批 ✅
+  → Batch 数 = 不同 Stencil 参数组合数，不是 Graphic 数量
 ```
 
 ### 13.3.2 RectMask2D 对合批的影响
