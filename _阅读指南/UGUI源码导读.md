@@ -15,40 +15,76 @@ https://github.com/Unity-Technologies/uGUI
 Window → Package Manager → Unity UI → 在文件管理器中显示
 ```
 
-源码核心目录结构：
+源码核心目录结构（基于 uGUI GitHub 仓库 `2019.1` 分支）：
 
 ```
-UnityEngine.UI/UI/Core/
-├── Canvas.cs              ← Canvas 组件
-├── CanvasRenderer.cs       ← CanvasRenderer 组件（C# 层封装）
-├── Graphic.cs              ← Graphic 抽象基类
-├── MaskableGraphic.cs      ← 支持 Mask 裁剪的 Graphic
-├── Image.cs                ← Image 组件
-├── RawImage.cs             ← RawImage 组件
-├── Text.cs                 ← 传统 Text 组件
-├── VertexHelper.cs         ← 顶点构建工具类
-├── Layout/
-│   ├── LayoutGroup.cs      ← 布局基类
-│   ├── LayoutRebuilder.cs  ← 布局重建执行器
-│   ├── ContentSizeFitter.cs
-│   ├── HorizontalOrVerticalLayoutGroup.cs
-│   └── GridLayoutGroup.cs
-├── Mask.cs                 ← Stencil Mask 组件
-├── RectMask2D.cs           ← 矩形裁剪组件
-├── EventSystem.cs          ← 事件系统核心
-├── ExecuteEvents.cs        ← 事件分发
-├── InputModules/
-│   ├── BaseInputModule.cs
-│   ├── StandaloneInputModule.cs
-│   └── InputSystemUIInputModule.cs
-├── Raycasters/
-│   ├── GraphicRaycaster.cs
-│   ├── PhysicsRaycaster.cs
-│   └── Physics2DRaycaster.cs
-├── Selectable.cs           ← 交互组件基类
-├── Button.cs
-├── ScrollRect.cs
-└── StencilMaterial.cs      ← Stencil 材质管理
+UnityEngine.UI/
+├── UI/
+│   ├── Core/                        ← UI 组件核心
+│   │   ├── Graphic.cs               ← Graphic 抽象基类
+│   │   ├── MaskableGraphic.cs       ← 支持 Mask 裁剪的 Graphic
+│   │   ├── Image.cs                 ← Image 组件
+│   │   ├── RawImage.cs              ← RawImage 组件
+│   │   ├── Text.cs                  ← 传统 Text 组件
+│   │   ├── Button.cs                ← Button 组件
+│   │   ├── Selectable.cs            ← 交互组件基类
+│   │   ├── Toggle.cs / ToggleGroup.cs
+│   │   ├── Slider.cs / Scrollbar.cs
+│   │   ├── Dropdown.cs / InputField.cs
+│   │   ├── ScrollRect.cs
+│   │   ├── Mask.cs / RectMask2D.cs
+│   │   ├── StencilMaterial.cs        ← Stencil 材质管理
+│   │   ├── MaskUtilities.cs
+│   │   ├── CanvasUpdateRegistry.cs   ← 重建调度核心
+│   │   ├── GraphicRegistry.cs
+│   │   ├── GraphicRaycaster.cs
+│   │   ├── FontUpdateTracker.cs
+│   │   ├── VertexHelper.cs           ← 顶点构建工具
+│   │   ├── Navigation.cs / ColorBlock.cs / SpriteState.cs
+│   │   └── ...
+│   │   ├── Layout/                   ← 布局子系统
+│   │   │   ├── LayoutGroup.cs
+│   │   │   ├── LayoutRebuilder.cs
+│   │   │   ├── HorizontalOrVerticalLayoutGroup.cs
+│   │   │   ├── GridLayoutGroup.cs
+│   │   │   ├── ContentSizeFitter.cs
+│   │   │   └── LayoutElement.cs / LayoutUtility.cs
+│   │   ├── Culling/                  ← 裁剪子系统
+│   │   │   ├── ClipperRegistry.cs
+│   │   │   └── IClippable.cs / IClipper.cs
+│   │   ├── VertexModifiers/          ← 顶点修改器
+│   │   │   ├── BaseMeshEffect.cs
+│   │   │   ├── Shadow.cs / Outline.cs
+│   │   │   └── PositionAsUV1.cs
+│   │   ├── MaterialModifiers/
+│   │   ├── SpecializedCollections/
+│   │   └── Utility/
+│   └── Animation/                    ← UI 动画支持
+│
+├── EventSystem/                      ← 事件系统（独立于 Core 之外）
+│   ├── EventSystem.cs                ← 事件系统核心
+│   ├── ExecuteEvents.cs              ← 事件分发（委托表）
+│   ├── EventData/
+│   │   └── PointerEventData.cs       ← 指针事件数据
+│   ├── InputModules/
+│   │   ├── BaseInputModule.cs
+│   │   ├── StandaloneInputModule.cs
+│   │   └── InputSystemUIInputModule.cs (新输入系统)
+│   └── Raycasters/
+│       ├── BaseRaycaster.cs
+│       ├── GraphicRaycaster.cs
+│       ├── PhysicsRaycaster.cs
+│       └── Physics2DRaycaster.cs
+│
+└── Properties/
+
+注意：
+- Canvas.cs 和 CanvasRenderer.cs 不在 uGUI 仓库中！
+  它们是 Unity 引擎内置组件，位于 UnityEngine.CoreModule
+  在 C# 侧可以看到 Canvas 和 CanvasRenderer 的部分 API，
+  但核心方法（BuildBatch 等）标记为 [NativeMethod]，由 C++ 实现
+- 事件系统（EventSystem）独立于 UI/Core 之外，
+  位于同级 EventSystem/ 目录下
 ```
 
 ---
