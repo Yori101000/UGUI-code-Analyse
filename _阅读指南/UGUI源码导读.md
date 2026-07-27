@@ -1,6 +1,8 @@
 # UGUI 源码导读
 
-> 本文档不是章节总结，而是**源码阅读指南**——告诉你每个知识点对应 UGUI 源码中的哪个文件、哪个类、哪个方法，以及怎么看懂它们。建议配合 UGUI 源码（Unity-Technologies/uGUI）一起阅读，源码位于 `UnityEngine.UI/UI/Core/` 目录下。
+> 本文档不是章节总结，而是**源码阅读指南**——告诉你每个知识点对应 UGUI 源码中的哪个文件、哪个类、哪个方法，以及怎么看懂它们。建议配合 UGUI 源码（Unity-Technologies/uGUI）一起阅读。
+
+> ⚠️ **注意**：Canvas、CanvasRenderer、RectTransform 是 Unity 引擎内置组件（位于 UnityEngine.CoreModule），不在 uGUI 仓库中。它们在 C# 侧暴露了部分 API，但核心方法标记为 `[NativeMethod]`，由引擎 C++ 实现。uGUI 仓库（`UnityEngine.UI/`）主要包含 UI 组件的 C# 源码，以及事件系统（EventSystem/）。
 
 ---
 
@@ -97,10 +99,10 @@ UnityEngine.UI/
 
 | 文件 | 说明 |
 |------|------|
-| `Canvas.cs` | 渲染入口，所有 UI 必须挂在 Canvas 下 |
-| `CanvasRenderer.cs` | 每个 UI 元素对应一个，保存渲染数据 |
-| `Graphic.cs` | 所有可视 UI 的抽象基类 |
-| `RectTransform.cs`（引擎内置） | UI 空间定义（非开源，但可通过 API 理解） |
+| `Canvas`（引擎内置） | 渲染入口，所有 UI 必须挂在 Canvas 下。位于 UnityEngine.CoreModule，不在 uGUI 仓库中 |
+| `CanvasRenderer`（引擎内置） | 每个 UI 元素对应一个，保存渲染数据。同样位于 UnityEngine.CoreModule |
+| `Graphic.cs` | 所有可视 UI 的抽象基类，在 UI/Core/ 下 |
+| `RectTransform`（引擎内置） | UI 空间定义，位于 UnityEngine.CoreModule，非开源 |
 
 ### 核心概念 vs 源码映射
 
@@ -199,11 +201,11 @@ void Update() {
 
 ### 源码文件
 
-RectTransform 的 C# 源码是引擎内置的，不在 UGUI 仓库中。但可以通过 `RectTransformUtility.cs`（位于 `UI/Core/`）和 `LayoutRebuilder.cs` 间接理解。
+RectTransform 的 C# 源码是引擎内置的，不在 UGUI 仓库中。但可以通过 `RectTransformUtility`（引擎内置工具类）和 `LayoutRebuilder.cs` 间接理解。
 
 | 文件 | 说明 |
 |------|------|
-| `RectTransformUtility.cs` | RectTransform 的工具方法 |
+| `RectTransformUtility`（引擎内置） | RectTransform 的工具方法，不在 uGUI 仓库中 |
 | `LayoutRebuilder.cs` | 布局重建时调用 RectTransform 的方法 |
 
 ### 核心概念 vs API 映射
@@ -365,8 +367,8 @@ protected override void OnPopulateMesh(VertexHelper vh) {
 
 | 文件 | 说明 |
 |------|------|
-| `Canvas.cs` | Canvas 组件，核心调度入口 |
-| `CanvasScaler.cs` | 分辨率适配 |
+| `Canvas`（引擎内置） | Canvas 组件，核心调度入口。位于 UnityEngine.CoreModule，不在 uGUI 仓库 |
+| `CanvasScaler.cs` | 分辨率适配，在 UI/Core/ 下 |
 
 ### 核心概念 vs 源码映射
 
@@ -403,10 +405,10 @@ public class Canvas : Behaviour {
 
 | 文件 | 说明 |
 |------|------|
-| `CanvasRenderer.cs` | C# 层封装，核心方法几乎都是 native 调用 |
+| `CanvasRenderer`（引擎内置） | C# 层封装，核心方法几乎都是 native 调用。位于 UnityEngine.CoreModule，不在 uGUI 仓库 |
 
 ```csharp
-public class CanvasRenderer : MonoBehaviour {
+// CanvasRenderer API（引擎内置，源码不可见，以下是从 API 文档和反推整理）
     public void SetMesh(Mesh mesh);          // 设置顶点数据
     public void SetMaterial(Material mat, Texture tex); // 设置材质
     public void SetColor(Color color);       // 设置颜色
@@ -975,7 +977,7 @@ Shader 实现见第 17 章，CPU 特效见第 16 章（BaseMeshEffect）。
 | `Canvas.BuildBatch` | 引擎 native 方法 | Canvas 正在合批，顶点多了或变化频繁 |
 | `LayoutRebuilder.Rebuild` | `LayoutRebuilder.cs` | Layout 正在递归计算 |
 | `Graphic.Rebuild` | `Graphic.cs` | Graphic 正在重建顶点 |
-| `Canvas.SendWillRenderCanvases` | `Canvas.cs` | 所有 UI 更新的入口 |
+| `Canvas.SendWillRenderCanvases` | 引擎 native 事件 | 所有 UI 更新的入口（Canvas.cs 不在 uGUI 仓库中） |
 
 ### 如何通过源码定位问题
 
