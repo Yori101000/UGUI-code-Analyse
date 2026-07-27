@@ -91,7 +91,7 @@ Canvas的`renderMode`属性决定了UI以何种方式接入Unity渲染管线。�
 `Canvas.renderMode`是一个枚举类型，定义在UGUI源码中：
 
 ```csharp
-// Canvas.cs（UGUI源码）
+// Canvas（引擎内置组件）
 public enum RenderMode
 {
     ScreenSpaceOverlay,  // 默认模式
@@ -112,7 +112,7 @@ public enum RenderMode
 - **不参与深度测试**：ZWrite Off，层级完全由Canvas排序决定
 
 ```csharp
-// Overlay模式在Canvas.cs中的典型配置
+// Overlay模式的典型配置
 // renderMode = RenderMode.ScreenSpaceOverlay
 // worldCamera = null（没有关联Camera）
 ```
@@ -141,7 +141,7 @@ UI绑定到特定Camera，参与该Camera的完整渲染流程。
 - **planeDistance控制距离**：UI距离Camera的平面距离，影响UI在透明队列中的排序
 
 ```csharp
-// Camera模式在Canvas.cs中的典型配置
+// Camera模式的典型配置
 // renderMode = RenderMode.ScreenSpaceCamera
 // worldCamera = 指定的Camera引用
 // planeDistance = 100（默认，UI距离Camera的平面距离）
@@ -175,7 +175,7 @@ Canvas完全进入三维世界坐标体系，UI作为3D物体存在于场景中�
 - **参与透明排序**：与场景中其他透明物体一起按距离排序
 
 ```csharp
-// WorldSpace模式在Canvas.cs中的典型配置
+// WorldSpace模式的典型配置
 // renderMode = RenderMode.WorldSpace
 // worldCamera = null（使用场景中渲染此Canvas的Camera）
 ```
@@ -219,7 +219,7 @@ UI的渲染层级是一个多因素共同决定的复杂问题。Canvas作为层
 所有Canvas都具备以下排序属性：
 
 ```csharp
-// Canvas.cs（UGUI源码，排序相关属性）
+// Canvas（引擎内置）
 public class Canvas : Behaviour
 {
     public RenderMode renderMode;      // Overlay / Camera / WorldSpace
@@ -296,7 +296,7 @@ Hierarchy顺序只有在**同级Canvas**且所有其他排序因素都相同时�
 `Canvas.BuildBatch()`是整个UI渲染流程的**最终提交阶段**。它在C#侧的定义非常简单：
 
 ```csharp
-// Canvas.cs（UGUI源码）
+// Canvas（引擎内置组件）
 public class Canvas : Behaviour
 {
     // 其他属性...
@@ -385,12 +385,12 @@ Canvas在以下情况下会触发BuildBatch：
 
 ## 7.6 Canvas关键源码解析
 
-### 7.6.1 Canvas.cs核心属性
+### 7.6.1 Canvas核心属性
 
-以下是Canvas.cs中C#侧可见的核心成员：
+以下是Canvas中C#侧可见的核心成员：
 
 ```csharp
-// Canvas.cs（UGUI源码，简化版）
+// Canvas（引擎内置组件，简化版）
 namespace UnityEngine
 {
     [RequireComponent(typeof(RectTransform))]
@@ -673,5 +673,5 @@ Canvas不是"UI组件的容器"这么简单——它是UGUI中**唯一具备渲�
 
 | 文件 | 关键内容 |
 |------|---------|
-| `Canvas.cs` | renderMode / sortingOrder / worldCamera / scaleFactor / BuildBatch() |
+| `Canvas`（引擎内置） | renderMode / sortingOrder / worldCamera / scaleFactor / BuildBatch() |
 | `CanvasScaler.cs` | 三种ScaleMode的计算逻辑，最终修改Canvas.scaleFactor |

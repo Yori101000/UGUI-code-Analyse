@@ -300,7 +300,7 @@ ContentSizeFitter.SetLayoutHorizontal()
 
 | 项目 | 说明 |
 |------|------|
-| 文件 | `RectTransformUtility.cs` |
+| 文件 | `RectTransformUtility`（引擎内置） |
 | 命名空间 | `UnityEngine` |
 | 关键特性 | 全部为 `public static` 方法，包含对 RectTransform 的多种空间坐标转换 |
 | 核心私有方法 | `PixelAdjustPoint()` / `PixelAdjustRect()` 等被内部组件调用 |

@@ -188,7 +188,7 @@ public class Graphic : UIBehaviour, ICanvasElement {
 所有 UI 必须放在 Canvas 下。Canvas 提供三种渲染模式（由 `Canvas.renderMode` 控制）：
 
 ```csharp
-// Canvas.cs（路径：UnityEngine.UI/UI/Core/Canvas.cs）
+// Canvas（引擎内置组件，位于 UnityEngine.CoreModule，不在 uGUI 仓库中）
 public class Canvas : Behaviour {
     public RenderMode renderMode;   // ScreenSpaceOverlay / ScreenSpaceCamera / WorldSpace
     public float scaleFactor;      // 由 CanvasScaler 动态修改
@@ -229,8 +229,8 @@ UnityEngine.UI/UI/Core/
 
 | 文件 | 类 | 职责 |
 |------|----|------|
-| `Canvas.cs` | Canvas | 渲染入口，触发 BuildBatch |
-| `CanvasRenderer.cs` | CanvasRenderer | 保存 UI 元素的 Mesh 和 Material |
+| `Canvas`（引擎内置） | Canvas | 渲染入口，触发 BuildBatch |
+| `CanvasRenderer`（引擎内置） | CanvasRenderer | 保存 UI 元素的 Mesh 和 Material |
 | `Graphic.cs` | Graphic | 抽象基类，定义 Rebuild 和 Dirty 机制 |
 | `CanvasUpdateRegistry.cs` | CanvasUpdateRegistry | 统一调度所有 UI 更新 |
 

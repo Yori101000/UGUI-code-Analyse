@@ -56,7 +56,7 @@ CanvasRenderer 暴露给 C# 层的核心方法就是一组 Set 方法。这些�
 `SetMesh(Mesh)` 是 CanvasRenderer 最重要的方法。它接收一个 Mesh 对象，存储为当前 UI 元素的网格数据。
 
 ```csharp
-// CanvasRenderer.cs（UnityEngine 命名空间下的核心类）
+// CanvasRenderer（引擎内置组件，位于 UnityEngine.CoreModule）
 public void SetMesh(Mesh mesh);
 ```
 
@@ -432,7 +432,7 @@ Graphic 持有 CanvasRenderer 的引用，但 CanvasRenderer 不持有 Graphic �
 ### 推荐的源码阅读路径
 
 ```
-打开 CanvasRenderer.cs → 重点阅读：
+打开 CanvasRenderer API 文档 → 重点阅读：
   1. [NativeMethod] 标注的方法 ← 理解 C# 与 Native 的边界
   2. SetMesh()          ← 核心方法，数据存入的入口
   3. EnableRectClipping ← 裁剪机制的底层接口
