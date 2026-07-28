@@ -70,20 +70,20 @@ UGUI 系统的整体架构可以分为三个逻辑层：
 
 ```
 ┌──────────────────────────────────────┐
-│           组件层（Component Layer）     │
+│        组件层（Component Layer）     │
 │  Graphic / Image / Text / Button     │
 │  LayoutGroup / ScrollRect / Mask     │
-│  负责：生成UI数据、响应事件、定义布局    │
+│  负责：生成UI数据、响应事件、定义布局 │
 ├──────────────────────────────────────┤
-│           系统层（System Layer）       │
+│         系统层（System Layer）       │
 │  CanvasUpdateRegistry / Canvas       │
 │  EventSystem / LayoutRebuilder       │
-│  负责：调度更新、合批提交、事件分发      │
+│  负责：调度更新、合批提交、事件分发   │
 ├──────────────────────────────────────┤
-│           渲染层（Render Layer）       │
+│         渲染层（Render Layer）       │
 │  CanvasRenderer / Mesh / Material    │
 │  GPU Shader / Command Buffer         │
-│  负责：将数据送入GPU、绘制到屏幕        │
+│  负责：将数据送入GPU、绘制到屏幕      │
 └──────────────────────────────────────┘
 ```
 
