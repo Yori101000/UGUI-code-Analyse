@@ -69,22 +69,29 @@ UGUI 的特征：
 UGUI 系统的整体架构可以分为三个逻辑层：
 
 ```
-┌──────────────────────────────────────┐
-│        组件层（Component Layer）     │
-│  Graphic / Image / Text / Button     │
-│  LayoutGroup / ScrollRect / Mask     │
-│  负责：生成UI数据、响应事件、定义布局 │
-├──────────────────────────────────────┤
-│         系统层（System Layer）       │
-│  CanvasUpdateRegistry / Canvas       │
-│  EventSystem / LayoutRebuilder       │
-│  负责：调度更新、合批提交、事件分发   │
-├──────────────────────────────────────┤
-│         渲染层（Render Layer）       │
-│  CanvasRenderer / Mesh / Material    │
-│  GPU Shader / Command Buffer         │
-│  负责：将数据送入GPU、绘制到屏幕      │
-└──────────────────────────────────────┘
+┌─────────────────────────────────────────┐
+│          组件层（Component Layer）         │
+│  Graphic / Image / Text                 │
+│  Selectable / Button / LayoutGroup      │
+│  职责：UI 结构定义、顶点数据生成、交互逻辑   │
+│  产出：调用 CanvasRenderer.SetMesh/SetMaterial │
+├─────────────────────────────────────────┤
+│          调度层（System Layer）            │
+│  CanvasUpdateRegistry（重建调度）          │
+│  Canvas（遍历 CanvasRenderer，调用        │
+│         BuildBatch() 合批提交 DrawCall）  │
+│  EventSystem（事件分发）                  │
+│  LayoutRebuilder（布局计算）              │
+├─────────────────────────────────────────┤
+│           渲染层（Render Layer）           │
+│  Mesh / Material / Texture（GPU 数据）    │
+│  Shader（UI/Default）                    │
+│  Blend / Stencil / Depth Test（GPU 状态） │
+│  职责：执行 DrawCall，完成像素绘制          │
+└─────────────────────────────────────────┘
+              ↑
+        Canvas.BuildBatch()
+        （CPU → GPU 的分界线）
 ```
 
 ### 组件层
@@ -95,7 +102,7 @@ UGUI 系统的整体架构可以分为三个逻辑层：
 - **交互系**（继承自 Selectable）：Button、Toggle、Slider、Dropdown——负责交互状态
 - **布局系**（继承自 LayoutGroup）：LayoutGroup 及其子类——负责子元素排列
 
-### 系统层
+### 系统层 → 调度层
 
 系统层负责调度和协调：
 
@@ -103,12 +110,23 @@ UGUI 系统的整体架构可以分为三个逻辑层：
 - **Canvas**：渲染入口，触发 BuildBatch 合批
 - **EventSystem**：事件调度器，管理输入模块和射线检测
 
+### 调度层
+
+调度层将组件层生成的数据组织并提交给 GPU，由 Canvas 统一驱动：
+
+- **Canvas**：每帧渲染前调用内置 native 方法 `Canvas.BuildBatch()`，遍历该 Canvas 下所有 CanvasRenderer 中存储的数据，将同材质同纹理的 Mesh 合并为同一个 DrawCall，统一提交给 GPU
+- **CanvasUpdateRegistry**：监听 `Canvas.willRenderCanvases` 事件，在每帧重建阶段调度 LayoutRebuilder 和 Graphic.Rebuild
+- **EventSystem**：每帧 Update 中驱动输入模块处理输入事件
+
 ### 渲染层
 
-渲染层负责将 UI 数据提交给 GPU：
+渲染层是 GPU 侧的执行阶段，接收 Canvas 提交的 DrawCall 并完成像素绘制：
 
-- **CanvasRenderer**：每个 UI 元素对应一个，存储该元素的 Mesh 和 Material
-- **BuildBatch**（引擎 native 方法）：遍历 CanvasRenderer，合并同材质同纹理的 Mesh，提交 DrawCall
+- **Mesh / Material / Texture**：GPU 读入的顶点数据和纹理资源
+- **Shader（UI/Default）**：执行顶点变换和片元着色，核心逻辑为 `tex2D × IN.color`
+- **Blend / Stencil / Depth Test**：GPU 固定管线状态，控制透明混合和裁剪
+
+> 注意：CanvasRenderer 不属于任何一层——它是 Graphic（组件层）和 Canvas（调度层）之间的**数据容器**。Graphic 调用 `SetMesh/SetMaterial` 写入数据，Canvas 的 BuildBatch 读取数据。它只存不处理。
 
 ---
 
