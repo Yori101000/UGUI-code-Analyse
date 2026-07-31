@@ -643,6 +643,58 @@ Canvas B (Overlay, Sorting Order = 0)
 
 ---
 
+## 7.9 AdditionalShaderChannels：顶点数据通道控制
+
+### 7.9.1 是什么
+
+`Canvas.additionalShaderChannels` 控制哪些顶点附加数据从 CPU 传递到 GPU Shader。默认只传 `position`、`color`、`uv0`，其余通道静默丢弃。
+
+```csharp
+[Flags]
+public enum AdditionalCanvasShaderChannels
+{
+    None      = 0,
+    TexCoord1 = 1,   // uv1（TEXCOORD1）
+    TexCoord2 = 2,   // uv2（TEXCOORD2）
+    TexCoord3 = 4,   // uv3（TEXCOORD3）
+    Normal    = 8,   // normal（NORMAL）
+    Tangent   = 16,  // tangent（TANGENT）
+}
+```
+
+### 7.9.2 功能对照表
+
+| 功能 | 需要 | 原因 |
+|------|------|------|
+| TextMeshPro | TexCoord2 | SDF 参数通过 uv2 传递 |
+| PositionAsUV1 | TexCoord1 | 位置复制到 uv1 |
+| Shadow/Outline | 无（CPU 侧） | 顶点复制，不依赖额外 UV |
+| 自定义 Shader 读 uv1/uv2/uv3 | 对应通道 | 未启用时数据被丢弃，不报错 |
+| 自定义 Shader 读 normal/tangent | Normal/Tangent | 法线/光照 |
+
+未开启通道时数据被静默丢弃——TMP 渲染为纯色块是最常见的表现。
+
+### 7.9.3 带宽成本
+
+| 配置 | 单顶点大小 | 1万顶点 Canvas |
+|------|-----------|---------------|
+| None（pos+color+uv0） | 32B | 320KB |
+| +TexCoord1 | 48B (+50%) | 480KB |
+| +TexCoord2 | 64B (+100%) | 640KB |
+| +Normal | 76B | 760KB |
+| +Tangent | 92B (+188%) | 920KB |
+
+按需开启，避免不必要带宽浪费。
+
+### 7.9.4 最佳实践
+
+- TMP 项目 → `TexCoord2`
+- 无 TMP → `None`
+- 不确定 → 仅 `TexCoord2`，非 TMP UI 不受影响
+- 除确定需要外不开启 Normal/Tangent/TexCoord3
+
+---
+
 ## 本章总结
 
 ### Canvas的核心地位

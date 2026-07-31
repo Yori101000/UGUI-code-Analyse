@@ -62,7 +62,9 @@ public class Graphic : UIBehaviour,
 ```csharp
 public interface ICanvasElement {
     void Rebuild(CanvasUpdate executing);   // 重建入口
-    void GraphicUpdateComplete();           // 重建完成回调
+    Transform transform { get; }            // 关联的 Transform（用于排序）
+    void LayoutComplete();                  // 布局阶段完成后回调
+    void GraphicUpdateComplete();           // 图形重建完成后回调
     bool IsDestroyed();                     // 是否已销毁
 }
 ```
@@ -180,9 +182,9 @@ public virtual void SetVerticesDirty() {
     // 注册到 CanvasUpdateRegistry 的 Graphic 重建队列
     CanvasUpdateRegistry.RegisterCanvasElementForGraphicRebuild(this);
 
-    // 如果当前节点参与了布局，通知 Layout 系统也需要重建
-    if (m_OnDirtyLayoutCallback != null)
-        m_OnDirtyLayoutCallback();
+    // 通知监听顶点脏的订阅者（如 Text 的字体重建跟踪）
+    if (m_OnDirtyVertsCallback != null)
+        m_OnDirtyVertsCallback();
 }
 ```
 
@@ -190,7 +192,7 @@ public virtual void SetVerticesDirty() {
 1. 只有处于 Active 状态的组件才需要处理
 2. 将 `m_VertsDirty` 标记为 true
 3. 将自己注册到 CanvasUpdateRegistry——相当于说"我在下一帧需要重建"
-4. 如果当前 Graphic 影响了布局（例如 Text 尺寸变化后需要重新布局），触发布局重建回调
+4. 触发 `m_OnDirtyVertsCallback` 回调（注意：是 Verts 回调，不是 Layout 回调。Text 组件用它注册了字体图集重建监听）
 
 ### 6.4.3 SetMaterialDirty()
 
@@ -209,15 +211,18 @@ public virtual void SetMaterialDirty() {
 ### 6.4.4 SetLayoutDirty()
 
 ```csharp
-// 当影响了布局时调用
-protected virtual void SetLayoutDirty() {
-    // 触发 LayoutRebuilder 的布局重建
+// Graphic.cs（实际源码）
+public virtual void SetLayoutDirty() {
+    if (!IsActive()) return;
+    // 关键：通过 LayoutRebuilder 标记布局重建
+    // 向上查找最近的 LayoutGroup 父级并注册到重建队列
+    LayoutRebuilder.MarkLayoutForRebuild(rectTransform);
     if (m_OnDirtyLayoutCallback != null)
         m_OnDirtyLayoutCallback();
 }
 ```
 
-`m_OnDirtyLayoutCallback` 通常由 Layout 系统在初始化时注册，指向 `LayoutRebuilder.MarkLayoutForRebuild`。当 Text 的文本内容变化导致尺寸改变时，`SetVerticesDirty` 会触发布局重建，通知父 LayoutGroup 重新排列所有子元素。
+核心逻辑：`SetLayoutDirty` 不只是触发回调——它直接调用 `LayoutRebuilder.MarkLayoutForRebuild`，向上查找最近的 LayoutGroup 父级并注册布局重建。当 Text 的文本内容变化导致尺寸改变时，此方法通知父 LayoutGroup 重新排列所有子元素。
 
 ### 6.4.5 触发场景
 
@@ -263,18 +268,22 @@ public void SetNativeSize() {
 ```csharp
 // CanvasUpdateRegistry.cs（伪代码，描述调度逻辑）
 private void PerformUpdate() {
-    // 阶段一：Layout Rebuild（ICanvasElement 中的 Layout 队列）
-    for (int i = 0; i < m_LayoutRebuildQueue.Count; i++) {
-        m_LayoutRebuildQueue[i].Rebuild(CanvasUpdate.Layout);
+    // 阶段一：Layout Rebuild（先排序，再按阶段 0-2 遍历）
+    for (int i = 0; i <= (int)CanvasUpdate.PostLayout; i++) {
+        for (int j = 0; j < m_LayoutRebuildQueue.Count; j++) {
+            m_LayoutRebuildQueue[j].Rebuild((CanvasUpdate)i);
+        }
     }
 
-    // 阶段二：PreRender Rebuild（Graphic 重建）
-    for (int i = 0; i < m_GraphicRebuildQueue.Count; i++) {
-        m_GraphicRebuildQueue[i].Rebuild(CanvasUpdate.PreRender);
-    }
-
-    // 阶段三：LatePreRender（Clipping 更新）
+    // 阶段二：裁剪更新（Layout 完成后、Graphic 重建前）
     ClipperRegistry.instance.Cull();
+
+    // 阶段三：Graphic Rebuild（阶段 3=PreRender, 4=LatePreRender）
+    for (int i = (int)CanvasUpdate.PreRender; i < (int)CanvasUpdate.MaxUpdateValue; i++) {
+        for (int j = 0; j < m_GraphicRebuildQueue.Count; j++) {
+            m_GraphicRebuildQueue[j].Rebuild((CanvasUpdate)i);
+        }
+    }
 }
 ```
 
@@ -316,71 +325,72 @@ public virtual void Rebuild(CanvasUpdate update) {
 ```csharp
 // Graphic.cs
 private void UpdateGeometry() {
-    // 步骤一：调用 DoMeshGeneration 生成/更新内部 Mesh
+    // 直接生成并提交：内部完成 OnPopulateMesh + FillMesh + SetMesh
     DoMeshGeneration();
-
-    // 步骤二：将 Mesh 提交给 CanvasRenderer
-    canvasRenderer.SetMesh(m_WorkerMesh);
 }
 
 private void DoMeshGeneration() {
-    // 创建一个 VertexHelper 实例
-    using (var vh = new VertexHelper()) {
-        // 调用虚方法 → 子类填充顶点数据
-        OnPopulateMesh(vh);
-
-        // 将 VertexHelper 的数据写入 m_WorkerMesh
-        vh.FillMesh(m_WorkerMesh);
+    // 使用静态共享的 s_VertexHelper（避免每帧分配）
+    if (rectTransform != null && rectTransform.rect.width >= 0 && rectTransform.rect.height >= 0)
+    {
+        OnPopulateMesh(s_VertexHelper);  // 子类填充顶点数据
     }
+    else
+        s_VertexHelper.Clear();
+
+    // 链式调用 IMeshModifier（Shadow/Outline 等效果）
+    var components = ListPool<Component>.Get();
+    GetComponents(typeof(IMeshModifier), components);
+    for (var i = 0; i < components.Count; i++)
+        ((IMeshModifier)components[i]).ModifyMesh(s_VertexHelper);
+    ListPool<Component>.Release(components);
+
+    // 将数据写入静态共享 Mesh，并提交给 CanvasRenderer
+    s_VertexHelper.FillMesh(workerMesh);
+    canvasRenderer.SetMesh(workerMesh);
 }
 ```
 
-`DoMeshGeneration` 是 `UpdateGeometry` 的内部实现，它做了三件事：
-
-1. 创建 `VertexHelper`——这是一个临时的顶点数据容器
-2. 调用 `OnPopulateMesh(vh)`——子类在此过程中向 `vh` 中添加顶点、三角形等
-3. 通过 `vh.FillMesh(m_WorkerMesh)`——将临时数据写入 Graphic 持久的 `m_WorkerMesh` 中
-
-`m_WorkerMesh` 是一个内部重用的 Mesh 对象：
-
-```csharp
-[NonSerialized]
-private Mesh m_WorkerMesh;  // 不会序列化，每帧重用
-
-private void EnsureWorkerMesh() {
-    if (m_WorkerMesh == null) {
-        m_WorkerMesh = new Mesh();
-        m_WorkerMesh.name = "Graphic Worker Mesh";
-        m_WorkerMesh.hideFlags = HideFlags.HideAndDontSave;
-        // 标记为动态——提示 Unity 此 Mesh 会被频繁更新
-        m_WorkerMesh.MarkDynamic();
-    }
-}
-```
+关键设计：
+- **`s_VertexHelper` 是 `static readonly` 共享实例**：所有 Graphic 复用同一个 VertexHelper，避免每帧创建的开销
+- **`workerMesh` 是静态共享 Mesh**：所有 Graphic 共用一个 Mesh 对象，通过 `FillMesh` 覆盖数据
+- **`SetMesh` 在 `DoMeshGeneration` 内部完成**，`UpdateGeometry` 只是入口
+- 注意：这是较新版本（UGUI 2019+ 包化后）的实现，旧版本（2018 及更早）使用每实例的 `m_WorkerMesh` + 每帧 `new VertexHelper()`，GC 开销更大
 
 ### 6.5.4 UpdateMaterial() — 材质更新
 
 ```csharp
-// Graphic.cs
-private void UpdateMaterial() {
-    // 步骤一：选择材质
-    // 如果有 modifiedMaterial（通过 IMaterialModifier 链修改过），
-    // 使用它；否则使用原始 material
-    Material mat = material;
-    if (m_ShouldRecalculateStencil) {
-        // MaskableGraphic 会通过 IMaterialModifier 生成 Stencil 材质
-        var modifiedMat = GetModifiedMaterial(mat);
-        mat = modifiedMat;
-    }
+// Graphic.cs（实际源码）
+protected virtual void UpdateMaterial() {
+    if (!IsActive()) return;
 
-    // 步骤二：设置材质和纹理到 CanvasRenderer
-    canvasRenderer.SetMaterial(mat, mainTexture);
-
-    // 步骤三：设置 Texture 的 Tiling 和 Offset（平铺参数）
-    // RawImage 就是通过此参数实现 UV 平铺的
+    canvasRenderer.materialCount = 1;
+    canvasRenderer.SetMaterial(materialForRendering, 0);
     canvasRenderer.SetTexture(mainTexture);
 }
 ```
+
+关键点：
+
+- **`materialForRendering` 是关键**：它不是直接返回 `material` 属性，而是先获取同 GameObject 上所有 `IMaterialModifier` 组件，按顺序调用 `GetModifiedMaterial()` 链式处理——Mask 的 Stencil 材质就是在这里注入的：
+
+```csharp
+// Graphic.cs（materialForRendering 的实现逻辑）
+public virtual Material materialForRendering {
+    get {
+        var components = ListPool<IMaterialModifier>.Get();
+        GetComponents<IMaterialModifier>(components);
+        var currentMat = material;
+        for (var i = 0; i < components.Count; i++)
+            currentMat = components[i].GetModifiedMaterial(currentMat);
+        ListPool<IMaterialModifier>.Release(components);
+        return currentMat;
+    }
+}
+```
+
+- **`materialCount = 1`**：声明该 CanvasRenderer 使用 1 个材质槽（多材质 UI 会设置更大的值）
+- **`SetMaterial(mat, 0)`**：第二个参数是材质槽索引，不是纹理
 
 > 💡 **注意**：`SetMaterial` 和 `SetTexture` 是 CanvasRenderer 的方法，它们只负责将材质/纹理绑定到当前 UI 元素，真正的 DrawCall 合并是在 Canvas 的 `BuildBatch` 阶段发生的。
 
@@ -395,18 +405,18 @@ Frame N:
 Frame N (当帧渲染前):
   2. Canvas.WillRenderCanvases 事件触发
   3. CanvasUpdateRegistry.PerformUpdate() 执行
-     a. Layout Rebuild（布局重建）
-     b. PreRender Rebuild（Graphic 重建）
-        → 遍历 m_GraphicRebuildQueue
+     a. Layout Rebuild（布局重建，阶段 0-2）
+     b. ClipperRegistry.Cull()（裁剪更新，Layout 之后 Graphic 之前）
+     c. Graphic Rebuild（阶段 3-4，遍历 m_GraphicRebuildQueue）
         → 调用每个 Graphic 的 Rebuild(CanvasUpdate.PreRender)
         → 调用 UpdateGeometry()
            → DoMeshGeneration()
-              → OnPopulateMesh(vh)  ← 子类重写
-              → vh.FillMesh(m_WorkerMesh)
-           → canvasRenderer.SetMesh(m_WorkerMesh)
+              → OnPopulateMesh(s_VertexHelper)  ← 子类重写
+              → IMeshModifier 链式修改
+              → s_VertexHelper.FillMesh(workerMesh)
+              → canvasRenderer.SetMesh(workerMesh)
         → 调用 UpdateMaterial()
-           → canvasRenderer.SetMaterial(mat, texture)
-     c. LatePreRender（裁剪更新）
+           → canvasRenderer.SetMaterial(materialForRendering, 0)
   4. Canvas.BuildBatch()（引擎 native 方法）
      → 遍历所有 CanvasRenderer
      → 合并同材质 + 同纹理的 Mesh
@@ -556,19 +566,21 @@ VertexHelper 的作用：
 ```
 
 ```csharp
-// VertexHelper.cs
+// VertexHelper.cs（实际源码）
 public class VertexHelper : IDisposable {
     private List<Vector3> m_Positions;       // 顶点位置（三维坐标）
     private List<Color32> m_Colors;          // 顶点颜色
-    private List<Vector2> m_Uv0S;            // UV 通道 0（主纹理）
-    private List<Vector2> m_Uv1S;            // UV 通道 1（光照贴图等）
-    private List<Vector2> m_Uv2S;            // UV 通道 2
-    private List<Vector2> m_Uv3S;            // UV 通道 3
+    private List<Vector4> m_Uv0S;            // UV 通道 0（主纹理，Vector4）
+    private List<Vector4> m_Uv1S;            // UV 通道 1
+    private List<Vector4> m_Uv2S;            // UV 通道 2
+    private List<Vector4> m_Uv3S;            // UV 通道 3
     private List<Vector3> m_Normals;         // 法线
     private List<Vector4> m_Tangents;        // 切线
     private List<int> m_Indices;             // 三角形索引
 }
 ```
+
+注意：UV 列表的类型是 `List<Vector4>` 而非 `List<Vector2>`——与 UIVertex 的 uv0~uv3 字段一致（Vector4 的 z/w 可用于传额外参数，如 TMP 的 SDF 阈值）。
 
 `VertexHelper` 维护了 9 个内部列表，覆盖了 Mesh 需要的全部顶点属性。这些数据最终会被写入到一个 `Mesh` 对象中。
 
@@ -577,15 +589,14 @@ public class VertexHelper : IDisposable {
 #### AddVert —— 添加一个顶点
 
 ```csharp
-// VertexHelper.cs
-// 方式一：指定位置、颜色、UV
-public void AddVert(Vector3 position, Color32 color, Vector2 uv0) {
+// VertexHelper.cs（实际源码）
+// 方式一：指定位置、颜色、UV（注意 uv0 是 Vector4）
+public void AddVert(Vector3 position, Color32 color, Vector4 uv0) {
     m_Positions.Add(position);
     m_Colors.Add(color);
     m_Uv0S.Add(uv0);
-    // 法线和切线用默认值
-    m_Normals.Add(k_TempNormal);    // 默认 (0, 0, -1)
-    m_Tangents.Add(k_TempTangent);  // 默认 (1, 0, 0, -1)
+    m_Normals.Add(s_DefaultNormal);    // 默认 (0, 0, -1)
+    m_Tangents.Add(s_DefaultTangent);  // 默认 (1, 0, 0, -1)
 }
 
 // 方式二：直接添加一个 UIVertex 结构体
@@ -611,7 +622,7 @@ public void AddTriangle(int idx0, int idx1, int idx2) {
 }
 ```
 
-三个参数分别对应三角形的三个顶点在 `m_Positions` 列表中的索引值。**顶点顺序必须为顺时针方向**，否则三角形面向背面，会被 GPU 裁剪掉。
+三个参数分别对应三角形的三个顶点在 `m_Positions` 列表中的索引值。注意：UGUI 的 UI Shader（`UI/Default`）设置了 `Cull Off`，因此顶点绕序对 UI 渲染无影响——正反面都可见。但在自定义 Shader 未关闭 Cull 时，需保证绕序正确（Unity 中默认正面为顺时针绕序）。
 
 #### FillMesh —— 填充到 Mesh
 
@@ -681,9 +692,10 @@ void GenerateQuad(VertexHelper vh, Rect rect, Color32 color) {
 
 ### 6.7.4 VertexHelper 的 IDisposable
 
-`VertexHelper` 实现了 `IDisposable` 接口。在 `DoMeshGeneration` 中，通过 `using` 语句确保其被正确释放：
+`VertexHelper` 实现了 `IDisposable` 接口。在旧版本 UGUI（2018 及更早）中，`DoMeshGeneration` 通过 `using` 语句确保其被释放：
 
 ```csharp
+// 旧版本（2018 及更早）
 private void DoMeshGeneration() {
     using (var vh = new VertexHelper()) {
         OnPopulateMesh(vh);
@@ -692,7 +704,7 @@ private void DoMeshGeneration() {
 }
 ```
 
-不过由于 `VertexHelper.Dispose()` 只执行了 `Clear()`，本质上和手动调用 `Clear()` 没有区别。使用 `using` 的主要目的是代码语义清晰——表示"这个 VertexHelper 的生命周期仅限于当前函数"。
+而新版本（2019+ 包化后）改为**静态共享实例**，不再使用 `using`。`VertexHelper.Dispose()` 只执行 `Clear()`，本质上和手动调用 `Clear()` 没有区别。
 
 ---
 
@@ -702,15 +714,19 @@ Graphic 是 C# 层面的组件，负责生成数据；CanvasRenderer 是引擎 n
 
 ### 6.8.1 自动创建
 
-Graphic 在 `Awake` 阶段会确保同级 GameObject 上存在一个 CanvasRenderer：
+Graphic 的 `canvasRenderer` 属性是**惰性加载**的——首次访问时如果不存在则自动创建（不是通过 Awake，而是通过属性 getter）：
 
 ```csharp
-// Graphic.cs
-protected override void Awake() {
-    base.Awake();
-    // 确保同级有 CanvasRenderer 组件
-    if (canvasRenderer == null) {
-        gameObject.AddComponent<CanvasRenderer>();
+// Graphic.cs（实际源码）
+public CanvasRenderer canvasRenderer {
+    get {
+        if (ReferenceEquals(m_CanvasRenderer, null)) {
+            m_CanvasRenderer = GetComponent<CanvasRenderer>();
+            if (ReferenceEquals(m_CanvasRenderer, null)) {
+                m_CanvasRenderer = gameObject.AddComponent<CanvasRenderer>();
+            }
+        }
+        return m_CanvasRenderer;
     }
 }
 ```
