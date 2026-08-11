@@ -355,7 +355,7 @@ private void DoMeshGeneration() {
 - **`s_VertexHelper` 是 `static readonly` 共享实例**：所有 Graphic 复用同一个 VertexHelper，避免每帧创建的开销
 - **`workerMesh` 是静态共享 Mesh**：所有 Graphic 共用一个 Mesh 对象，通过 `FillMesh` 覆盖数据
 - **`SetMesh` 在 `DoMeshGeneration` 内部完成**，`UpdateGeometry` 只是入口
-- 注意：这是较新版本（UGUI 2019+ 包化后）的实现，旧版本（2018 及更早）使用每实例的 `m_WorkerMesh` + 每帧 `new VertexHelper()`，GC 开销更大
+- main 中 `s_VertexHelper` 用 `Allocator.Domain` 分配原生内存（见 5.7），既不进 C# GC 堆，也随 Domain 卸载自动回收
 
 ### 5.5.4 UpdateMaterial() — 材质更新
 
@@ -566,46 +566,42 @@ VertexHelper 的作用：
 ```
 
 ```csharp
-// VertexHelper.cs（实际源码）
+// VertexHelper.cs（UGUI main，路径：Runtime/UGUI/UI/Core/Utility/VertexHelper.cs）
 public class VertexHelper : IDisposable {
-    private List<Vector3> m_Positions;       // 顶点位置（三维坐标）
-    private List<Color32> m_Colors;          // 顶点颜色
-    private List<Vector4> m_Uv0S;            // UV 通道 0（主纹理，Vector4）
-    private List<Vector4> m_Uv1S;            // UV 通道 1
-    private List<Vector4> m_Uv2S;            // UV 通道 2
-    private List<Vector4> m_Uv3S;            // UV 通道 3
-    private List<Vector3> m_Normals;         // 法线
-    private List<Vector4> m_Tangents;        // 切线
-    private List<int> m_Indices;             // 三角形索引
+    private NativeArray<UIVertex> m_Verts;    // 顶点流（AoS 交错存储）
+    private NativeArray<ushort>   m_Indices;  // 三角形索引
+
+    private int m_VertCount;     // 当前顶点数
+    private int m_IndexCount;    // 当前索引数
+    private int m_VertCapacity;  // 顶点容量（按 2 的幂增长）
+    private int m_IndexCapacity; // 索引容量
+
+    const int k_InitialVertCapacity  = 64;   // 初始顶点容量
+    const int k_InitialIndexCapacity = 96;   // 初始索引容量
+    const int k_MaxVertCount = 65000;        // 顶点数上限
 }
 ```
 
-注意：UV 列表的类型是 `List<Vector4>` 而非 `List<Vector2>`——与 UIVertex 的 uv0~uv3 字段一致（Vector4 的 z/w 可用于传额外参数，如 TMP 的 SDF 阈值）。
+注意：**当前 main 使用 NativeArray 单流（AoS）存储**，`UIVertex` 的字段顺序与 GPU 顶点布局一一对应（Position / Normal / Tangent / Color / TexCoord0~3 / TexCoord4=prevPosition），`FillMesh` 用一次 `SetVertexBufferData` 就能整体上传。旧版本曾用 9 个并行 `List` 逐通道存储，本章以 main 为准。
 
-`VertexHelper` 维护了 9 个内部列表，覆盖了 Mesh 需要的全部顶点属性。这些数据最终会被写入到一个 `Mesh` 对象中。
+`VertexHelper` 维护的顶点流覆盖了 Mesh 需要的全部顶点属性。这些数据最终会被写入到一个 `Mesh` 对象中。
 
 ### 5.7.2 核心方法
 
 #### AddVert —— 添加一个顶点
 
 ```csharp
-// VertexHelper.cs（实际源码）
+// VertexHelper.cs（UGUI main）
 // 方式一：指定位置、颜色、UV（注意 uv0 是 Vector4）
 public void AddVert(Vector3 position, Color32 color, Vector4 uv0) {
-    m_Positions.Add(position);
-    m_Colors.Add(color);
-    m_Uv0S.Add(uv0);
-    m_Normals.Add(s_DefaultNormal);    // 默认 (0, 0, -1)
-    m_Tangents.Add(s_DefaultTangent);  // 默认 (1, 0, 0, -1)
+    AddVert(position, color, uv0, Vector4.zero, s_DefaultNormal, s_DefaultTangent);
+    // 未指定的通道用默认值：normal=(0,0,-1)、tangent=(1,0,0,-1)、prevPosition=0
 }
 
 // 方式二：直接添加一个 UIVertex 结构体
 public void AddVert(UIVertex v) {
-    m_Positions.Add(v.position);
-    m_Colors.Add(v.color);
-    m_Uv0S.Add(v.uv0);
-    m_Normals.Add(v.normal);
-    m_Tangents.Add(v.tangent);
+    EnsureVertCapacity(m_VertCount + 1);
+    m_Verts[m_VertCount++] = v;
 }
 ```
 
@@ -614,51 +610,54 @@ public void AddVert(UIVertex v) {
 #### AddTriangle —— 添加一个三角形
 
 ```csharp
-// VertexHelper.cs
+// VertexHelper.cs（UGUI main）
 public void AddTriangle(int idx0, int idx1, int idx2) {
-    m_Indices.Add(idx0);
-    m_Indices.Add(idx1);
-    m_Indices.Add(idx2);
+    EnsureIndexCapacity(m_IndexCount + 3);
+    m_Indices[m_IndexCount + 0] = (ushort)idx0;
+    m_Indices[m_IndexCount + 1] = (ushort)idx1;
+    m_Indices[m_IndexCount + 2] = (ushort)idx2;
+    m_IndexCount += 3;
 }
 ```
 
-三个参数分别对应三角形的三个顶点在 `m_Positions` 列表中的索引值。注意：UGUI 的 UI Shader（`UI/Default`）设置了 `Cull Off`，因此顶点绕序对 UI 渲染无影响——正反面都可见。但在自定义 Shader 未关闭 Cull 时，需保证绕序正确（Unity 中默认正面为顺时针绕序）。
+三个参数分别对应三角形的三个顶点在顶点流中的索引值（内部以 `ushort` 存储）。注意：UGUI 的 UI Shader（`UI/Default`）设置了 `Cull Off`，因此顶点绕序对 UI 渲染无影响——正反面都可见。但在自定义 Shader 未关闭 Cull 时，需保证绕序正确（Unity 中默认正面为顺时针绕序）。
 
 #### FillMesh —— 填充到 Mesh
 
 ```csharp
-// VertexHelper.cs
+// VertexHelper.cs（UGUI main）
 public void FillMesh(Mesh mesh) {
-    mesh.Clear();        // 先清空旧数据
+    if (m_VertCount >= k_MaxVertCount)
+        throw new ArgumentException("Mesh can not have more than 65000 vertices");
 
-    // 将列表数据设置到 Mesh 的各个属性通道
-    mesh.SetVertices(m_Positions);
-    mesh.SetColors(m_Colors);
-    mesh.SetUVs(0, m_Uv0S);
-    mesh.SetUVs(1, m_Uv1S);
-    mesh.SetNormals(m_Normals);
-    mesh.SetTangents(m_Tangents);
-    mesh.SetTriangles(m_Indices, 0);  // 0 = submesh 索引
+    if (m_VertCount == 0 || m_IndexCount == 0) { mesh.Clear(); return; }
+
+    // 9 通道单流布局：Position/Normal/Tangent/Color/TexCoord0~3/TexCoord4(prevPosition)
+    mesh.SetVertexBufferParams(m_VertCount, s_VertexLayout);
+    mesh.SetIndexBufferParams(m_IndexCount, IndexFormat.UInt16);
+    mesh.SetVertexBufferData(m_Verts, 0, 0, m_VertCount, 0, k_BypassFlags);
+    mesh.SetIndexBufferData(m_Indices, 0, 0, m_IndexCount, k_BypassFlags);
+
+    mesh.SetSubMesh(0, new SubMeshDescriptor(0, m_IndexCount, MeshTopology.Triangles)
+    {
+        firstVertex = 0,
+        vertexCount = m_VertCount,
+    }, k_BypassFlags);
+    mesh.RecalculateBounds();
 }
 ```
 
 #### Clear —— 清空数据
 
 ```csharp
+// VertexHelper.cs（UGUI main）
 public void Clear() {
-    m_Positions.Clear();
-    m_Colors.Clear();
-    m_Uv0S.Clear();
-    m_Uv1S.Clear();
-    m_Uv2S.Clear();
-    m_Uv3S.Clear();
-    m_Normals.Clear();
-    m_Tangents.Clear();
-    m_Indices.Clear();
+    m_VertCount = 0;   // 只重置计数
+    m_IndexCount = 0;
 }
 ```
 
-> ⚠ **勘误 #2**：部分资料将 `Clear()` 描述为"仅重置索引计数器，不清除数据"，这在较新版本的 UGUI 中是不准确的。实际上 `VertexHelper.Clear()` 会清空所有列表——从 2019.x 版本起就是这样实现的。但清空时不会释放容量（`List.Clear()` 不释放 `Capacity`），所以重新添加顶点的过程中不会触发内存分配。
+> ⚠ **勘误 #2**：部分资料将 `Clear()` 描述为"清空所有列表"，这在当前 main 中是不准确的。main 的 `VertexHelper.Clear()` **只重置 `m_VertCount` / `m_IndexCount` 两个计数**，NativeArray 容量保留、旧数据等待被下次填充覆盖；只有 `Dispose()` 才释放原生内存。
 
 ### 5.7.3 一个完整的 Quad 生成示例
 
@@ -668,10 +667,10 @@ void GenerateQuad(VertexHelper vh, Rect rect, Color32 color) {
     vh.Clear();
 
     // 添加四个顶点
-    vh.AddVert(new Vector3(rect.xMin, rect.yMin, 0), color, new Vector2(0, 0));  // 0: 左下
-    vh.AddVert(new Vector3(rect.xMin, rect.yMax, 0), color, new Vector2(0, 1));  // 1: 左上
-    vh.AddVert(new Vector3(rect.xMax, rect.yMax, 0), color, new Vector2(1, 1));  // 2: 右上
-    vh.AddVert(new Vector3(rect.xMax, rect.yMin, 0), color, new Vector2(1, 0));  // 3: 右下
+    vh.AddVert(new Vector3(rect.xMin, rect.yMin, 0), color, new Vector4(0, 0, 0, 0));  // 0: 左下
+    vh.AddVert(new Vector3(rect.xMin, rect.yMax, 0), color, new Vector4(0, 1, 0, 0));  // 1: 左上
+    vh.AddVert(new Vector3(rect.xMax, rect.yMax, 0), color, new Vector4(1, 1, 0, 0));  // 2: 右上
+    vh.AddVert(new Vector3(rect.xMax, rect.yMin, 0), color, new Vector4(1, 0, 0, 0));  // 3: 右下
 
     // 两个三角形
     vh.AddTriangle(0, 1, 2);  // 左下 → 左上 → 右上
@@ -692,19 +691,22 @@ void GenerateQuad(VertexHelper vh, Rect rect, Color32 color) {
 
 ### 5.7.4 VertexHelper 的 IDisposable
 
-`VertexHelper` 实现了 `IDisposable` 接口。在旧版本 UGUI（2018 及更早）中，`DoMeshGeneration` 通过 `using` 语句确保其被释放：
+`VertexHelper` 实现了 `IDisposable` 接口。在 main 中，`Graphic` 使用**静态共享**的 `s_VertexHelper`（`new VertexHelper(Allocator.Domain)`），`DoMeshGeneration` 不再每帧创建/释放实例；`Dispose()` 负责真正释放两个 NativeArray：
 
 ```csharp
-// 旧版本（2018 及更早）
-private void DoMeshGeneration() {
-    using (var vh = new VertexHelper()) {
-        OnPopulateMesh(vh);
-        vh.FillMesh(m_WorkerMesh);
-    }
+// VertexHelper.cs（UGUI main）
+public void Dispose() {
+    if (m_Verts.IsCreated)   m_Verts.Dispose();
+    if (m_Indices.IsCreated) m_Indices.Dispose();
+
+    m_VertCount = 0;
+    m_IndexCount = 0;
+    m_VertCapacity = 0;
+    m_IndexCapacity = 0;
 }
 ```
 
-而新版本（2019+ 包化后）改为**静态共享实例**，不再使用 `using`。`VertexHelper.Dispose()` 只执行 `Clear()`，本质上和手动调用 `Clear()` 没有区别。
+`Dispose()` 与 `Clear()` 不同：`Clear()` 只重置计数、保留内存，`Dispose()` 才归还原生内存。对用户代码而言，临时 `VertexHelper` 仍可用 `using` 管理生命周期（默认构造使用 `Allocator.Persistent`，需要显式释放）。
 
 ---
 
