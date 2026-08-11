@@ -4,7 +4,7 @@
 
 > ⚠️ **结构更新（2026-08）**：本书已重构为四部分 25 章，总目录见 `README.md`。本导读仍按旧章节体系编写：旧编号 N 对应新章节请查 README 目录表；其中 TMP 深度分析并入第 16 章、URP/HDRP 并入第 10 章、ScrollRect 并入第 11 章、Profiler 实战并入第 24 章。当前 uGUI main 分支为 `com.unity.ugui` 包结构（`Runtime/UGUI/UI/Core/`、`Runtime/UGUI/EventSystem/`），旧分支（如 2019.1）为 `UnityEngine.UI/UI/`。
 
-> ⚠️ **注意**：Canvas、CanvasRenderer、RectTransform 是 Unity 引擎内置组件（位于 UnityEngine.CoreModule），不在 uGUI 仓库中。它们在 C# 侧暴露了部分 API，但核心方法标记为 `[NativeMethod]`，由引擎 C++ 实现。uGUI 仓库（`UnityEngine.UI/`）主要包含 UI 组件的 C# 源码，以及事件系统（EventSystem/）。
+> ⚠️ **注意**：Canvas、CanvasRenderer、RectTransformUtility、UIVertex 等是 Unity 引擎内置组件（位于 UnityEngine.UIModule，RectTransform 位于 UnityEngine.CoreModule），不在 uGUI 仓库中。它们在 C# 侧暴露了部分 API，但核心方法标记为 `[NativeMethod]`，由引擎 C++ 实现。uGUI 仓库（`UnityEngine.UI/`）主要包含 UI 组件的 C# 源码，以及事件系统（EventSystem/）。
 
 ---
 
@@ -102,7 +102,7 @@ UnityEngine.UI/
 | 文件 | 说明 |
 |------|------|
 | `Canvas`（引擎内置） | 渲染入口，所有 UI 必须挂在 Canvas 下。位于 UnityEngine.CoreModule，不在 uGUI 仓库中 |
-| `CanvasRenderer`（引擎内置） | 每个 UI 元素对应一个，保存渲染数据。同样位于 UnityEngine.CoreModule |
+| `CanvasRenderer`（引擎内置） | 每个 UI 元素对应一个，保存渲染数据。同样位于 UnityEngine.UIModule |
 | `Graphic.cs` | 所有可视 UI 的抽象基类，在 UI/Core/ 下 |
 | `RectTransform`（引擎内置） | UI 空间定义，位于 UnityEngine.CoreModule，非开源 |
 
@@ -407,7 +407,7 @@ public class Canvas : Behaviour {
 
 | 文件 | 说明 |
 |------|------|
-| `CanvasRenderer`（引擎内置） | C# 层封装，核心方法几乎都是 native 调用。位于 UnityEngine.CoreModule，不在 uGUI 仓库 |
+| `CanvasRenderer`（引擎内置） | C# 层封装，核心方法几乎都是 native 调用。位于 UnityEngine.UIModule，不在 uGUI 仓库 |
 
 ```csharp
 // CanvasRenderer API（引擎内置，源码不可见，以下是从 API 文档和反推整理）

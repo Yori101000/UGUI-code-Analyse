@@ -88,7 +88,7 @@ Canvas的`renderMode`属性决定了UI以何种方式接入Unity渲染管线。�
 
 ## 6.3 三种Render Mode详解
 
-`Canvas.renderMode`是一个枚举类型，定义在UGUI源码中：
+`Canvas.renderMode`是一个枚举类型，定义在引擎侧（`UnityEngine.RenderMode`，不在 uGUI 仓库中）：
 
 ```csharp
 // Canvas（引擎内置组件）
@@ -378,6 +378,8 @@ Canvas在以下情况下会触发BuildBatch：
 - Canvas启用/禁用
 - 新UI元素被添加到Canvas下
 - 每帧都会至少执行一次（即使没有变化，也会检查）
+
+> 以上为引擎内部行为，C# 侧无源码可查，依据 Unity 官方文档与 Frame Debugger 观察推断（BuildBatch 本身是 native 方法）。
 
 > **性能启示**：频繁触发BuildBatch是UI性能问题的常见来源。将**变化频繁**的UI（如实时更新的HUD）放在独立的Canvas中，可以避免它影响整个UI系统的Batch重建。
 
@@ -727,3 +729,11 @@ Canvas不是"UI组件的容器"这么简单——它是UGUI中**唯一具备渲�
 |------|---------|
 | `Canvas`（引擎内置） | renderMode / sortingOrder / worldCamera / scaleFactor / BuildBatch() |
 | `CanvasScaler.cs` | 三种ScaleMode的计算逻辑，最终修改Canvas.scaleFactor |
+
+---
+
+## 勘误汇总（对照官方文档）
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🟡 | 6.3 | `RenderMode` 枚举"定义在 UGUI 源码中" | 引擎侧 `UnityEngine.RenderMode`（`UnityEngine.UIModule`），不在 uGUI 仓库 |

@@ -294,7 +294,7 @@ ContentSizeFitter.SetLayoutHorizontal()
 
 ## 3.6 RectTransformUtility 工具类
 
-`RectTransformUtility` 是 UGUI 源码中的静态工具类文件（位于 `UnityEngine.UI/UI/Core/`），提供了 RectTransform 空间变换的核心辅助方法。
+`RectTransformUtility` 是 Unity 引擎内置的静态工具类（`UnityEngine` 命名空间，`UnityEngine.UIModule` 模块），**不在 uGUI 仓库中**。uGUI 的 `GraphicRaycaster`、`Scrollbar`、`ScrollRect` 等组件会调用它，因此常被误认为 uGUI 源码。
 
 ### 3.6.1 文件位置与作用
 
@@ -303,7 +303,7 @@ ContentSizeFitter.SetLayoutHorizontal()
 | 文件 | `RectTransformUtility`（引擎内置） |
 | 命名空间 | `UnityEngine` |
 | 关键特性 | 全部为 `public static` 方法，包含对 RectTransform 的多种空间坐标转换 |
-| 核心私有方法 | `PixelAdjustPoint()` / `PixelAdjustRect()` 等被内部组件调用 |
+| 公开静态方法 | `PixelAdjustPoint()` / `PixelAdjustRect()` 等（`public static`，非私有），被引擎与 uGUI 内部组件调用 |
 
 ### 3.6.2 核心 API
 
@@ -326,12 +326,11 @@ public static bool ScreenPointToWorldPointInRectangle(
     out Vector3 worldPoint
 );
 
-// 世界坐标 → RectTransform 本地坐标
-public static bool WorldToPointInRectangle(
-    RectTransform rect,
-    Vector2 worldPoint,
-    out Vector2 localPoint
-);
+// 世界坐标 → 屏幕坐标
+public static Vector2 WorldToScreenPoint(Camera cam, Vector3 worldPoint);
+
+// 屏幕坐标 → 射线（WorldSpace Canvas 的射线检测）
+public static Ray ScreenPointToRay(Camera cam, Vector2 screenPos);
 ```
 
 **矩形碰撞检测**：
@@ -449,3 +448,13 @@ RectTransform 是 UGUI 整个布局和渲染系统的空间基础：
 6. **Graphic 系统**读取 RectTransform 的 `rect` 属性生成渲染网格，形成从"空间定义"到"视觉表现"的完整链路
 
 > RectTransform 的 C# 源码虽然不在 UGUI 仓库中，但它的所有公开 API 都可以通过 Unity 官方文档和运行时反射进行验证。在实际开发中，理解锚点和轴心的工作机制远比背诵 API 参数更为重要——它们是 UI 自适应布局的理论基础。
+
+---
+
+## 勘误汇总（对照 uGUI main 与官方文档）
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🔴 | 3.6 | `RectTransformUtility` 是 UGUI 源码中的静态工具类文件（位于 `UnityEngine.UI/UI/Core/`） | 引擎内置类型（`UnityEngine.UIModule`），不在 uGUI 仓库；uGUI 只是调用方 |
+| 2 | 🔴 | 3.6.2 | 存在 `WorldToPointInRectangle(RectTransform, Vector2, out Vector2)` 方法 | 官方 API 中不存在该方法；世界→屏幕应使用 `WorldToScreenPoint`，另有 `ScreenPointToRay` 等 |
+| 3 | 🟢 | 3.6.1 | `PixelAdjustPoint()` / `PixelAdjustRect()` 是"核心私有方法" | 均为 `public static`，非私有 |

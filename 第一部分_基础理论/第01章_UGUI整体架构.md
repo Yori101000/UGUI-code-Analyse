@@ -312,7 +312,8 @@ com.unity.ugui/（GitHub: Unity-Technologies/uGUI, main 分支）
     │   ├── Selectable.cs / Button.cs / Toggle.cs / Slider.cs / Scrollbar.cs / Dropdown.cs / InputField.cs
     │   ├── Mask.cs / RectMask2D.cs / StencilMaterial.cs / MaskUtilities.cs
     │   ├── CanvasUpdateRegistry.cs / GraphicRegistry.cs / GraphicRaycaster.cs
-    │   ├── ScrollRect.cs / VertexHelper.cs / FontUpdateTracker.cs
+    │   ├── ScrollRect.cs / FontUpdateTracker.cs
+    │   ├── Utility/              ← VertexHelper.cs（网格构建工具）
     │   ├── Layout/               ← 布局子系统
     │   │   ├── LayoutGroup.cs / LayoutRebuilder.cs / ContentSizeFitter.cs
     │   │   ├── HorizontalOrVerticalLayoutGroup.cs / GridLayoutGroup.cs
@@ -327,7 +328,7 @@ com.unity.ugui/（GitHub: Unity-Technologies/uGUI, main 分支）
 
 注意两点：
 
-- `Canvas`、`CanvasRenderer`、`RectTransform` 是 Unity 引擎内置组件，位于 `UnityEngine.CoreModule`，不在 uGUI 仓库中。C# 侧只暴露部分 API，核心方法（如 `Canvas.BuildBatch`）标记 `[NativeMethod]`，由引擎 C++ 实现，看不到源码。
+- `Canvas`、`CanvasRenderer`、`RectTransformUtility`、`UIVertex` 等属于 `UnityEngine.UIModule`，`RectTransform` 属于 `UnityEngine.CoreModule`——它们都是 Unity 引擎内置类型，不在 uGUI 仓库中。C# 侧只暴露部分 API，核心方法（如 `Canvas.BuildBatch`）标记 `[NativeMethod]`，由引擎 C++ 实现，看不到源码。
 - `InputSystemUIInputModule`（新输入系统）不在 uGUI 仓库中，由 Input System 包提供。
 
 本章涉及的核心文件：
@@ -360,3 +361,12 @@ com.unity.ugui/（GitHub: Unity-Technologies/uGUI, main 分支）
   4. OnPopulateMesh()      ← 虚方法，子类实现生成顶点
   5. UpdateGeometry()      ← 理解 Mesh 如何提交给 CanvasRenderer
 ```
+
+---
+
+## 1.11 勘误汇总（对照 uGUI main）
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🟡 | 1.9 | `Canvas`、`CanvasRenderer`、`RectTransform` 均位于 `UnityEngine.CoreModule` | `Canvas`/`CanvasRenderer` 属 `UnityEngine.UIModule`，仅 `RectTransform` 在 `UnityEngine.CoreModule` |
+| 2 | 🟡 | 1.9 | `VertexHelper.cs` 直接位于 `UI/Core/` | main 中位于 `UI/Core/Utility/` |

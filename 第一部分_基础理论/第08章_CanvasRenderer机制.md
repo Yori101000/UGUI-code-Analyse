@@ -56,13 +56,15 @@ CanvasRenderer 暴露给 C# 层的核心方法就是一组 Set 方法。这些�
 `SetMesh(Mesh)` 是 CanvasRenderer 最重要的方法。它接收一个 Mesh 对象，存储为当前 UI 元素的网格数据。
 
 ```csharp
-// CanvasRenderer（引擎内置组件，位于 UnityEngine.CoreModule）
+// CanvasRenderer（引擎内置组件，位于 UnityEngine.UIModule）
 public void SetMesh(Mesh mesh);
 ```
 
 当调用 `SetMesh` 时，CanvasRenderer 不会复制 Mesh 数据——它持有对 Mesh 对象的引用。这意味着：
 - 如果后续修改了该 Mesh 的顶点，CanvasRenderer 中看到的是修改后的数据
 - `Graphic.cs` 内部使用的 `m_WorkerMesh` 是同一个 Mesh 实例的反复重用
+
+> 以上为引擎侧行为，C# 无源码，依据官方文档与实际渲染行为推断。
 
 ### 8.2.2 SetMaterial：存入材质
 
@@ -88,6 +90,8 @@ public void SetColor(Color color);
 
 这个颜色值最终会与 Mesh 中的顶点颜色进行混合（相乘），作为 UI 最终的显示颜色。`Graphic.color` 属性最终就是通过此方法传递给 CanvasRenderer。
 
+> （引擎行为：`SetColor` 的混色方式由引擎与 UI Shader 共同决定，C# 侧无源码，依据官方文档与渲染结果推断。）
+
 ### 8.2.5 Clear：清空所有数据
 
 ```csharp
@@ -105,46 +109,48 @@ CanvasRenderer 本身是"被动"的——它自己不生成任何数据，所有
 ### 8.3.1 Graphic.UpdateGeometry 中的协作
 
 ```csharp
-// Graphic.cs 中与 CanvasRenderer 协作的核心代码
-private void UpdateGeometry()
+// Graphic.cs（UGUI main）：dirty 判断在 Rebuild 的 PreRender 阶段
+private void Rebuild(CanvasUpdate update)
 {
-    if (canvasRenderer == null)
-        return;
-
-    if (m_VertsDirty)
+    if (update == CanvasUpdate.PreRender)
     {
-        DoMeshGeneration();  // 调用 OnPopulateMesh(VertexHelper) 生成顶点数据
-    }
-    else if (m_DirtyVerts)
-    {
-        DoMeshUpdate();      // 增量更新顶点数据
-    }
-
-    if (m_VertsDirty || m_DirtyVerts)
-    {
-        canvasRenderer.SetMesh(m_WorkerMesh);  // ← 关键：将 Mesh 提交给 CanvasRenderer
-        m_VertsDirty = false;
-        m_DirtyVerts = false;
+        if (m_VertsDirty)
+        {
+            UpdateGeometry();   // → DoMeshGeneration()，生成并提交顶点
+            m_VertsDirty = false;
+        }
+        if (m_MaterialDirty)
+        {
+            UpdateMaterial();
+            m_MaterialDirty = false;
+        }
     }
 }
+
+// UpdateGeometry 本身只负责"生成 + 提交"：
+// DoMeshGeneration() → OnPopulateMesh(s_VertexHelper)
+//                    → IMeshModifier 链
+//                    → s_VertexHelper.FillMesh(workerMesh)
+//                    → canvasRenderer.SetMesh(workerMesh)
 ```
 
 流程解析：
-1. `m_VertsDirty` 或 `m_DirtyVerts` 标记被设置（由 `SetVerticesDirty()` 触发）
-2. `DoMeshGeneration()` 调用子类的 `OnPopulateMesh(VertexHelper vh)`，将顶点数据写入 `m_WorkerMesh`
-3. `canvasRenderer.SetMesh(m_WorkerMesh)` 将 Mesh 存入 CanvasRenderer
-4. 清除 dirty 标记
+1. `SetVerticesDirty()` 设置 `m_VertsDirty`，并把 Graphic 注册到 `CanvasUpdateRegistry` 的图形重建队列
+2. `Canvas.willRenderCanvases` 触发后，`PerformUpdate()` 在 `PreRender` 阶段调用 `Graphic.Rebuild()`
+3. `UpdateGeometry()` → `DoMeshGeneration()`：子类 `OnPopulateMesh(VertexHelper)` 生成顶点 → `FillMesh(workerMesh)` → `canvasRenderer.SetMesh(workerMesh)`
+4. 重建结束清除 dirty 标记（main 中不存在 `m_DirtyVerts` / `DoMeshUpdate` 增量路径）
 
 ### 8.3.2 Graphic.UpdateMaterial 中的协作
 
 ```csharp
-// Graphic.cs 中的材质更新
+// Graphic.cs（UGUI main）中的材质更新
 private void UpdateMaterial()
 {
     if (canvasRenderer == null)
         return;
 
-    canvasRenderer.SetMaterial(material, 0);    // 设置主材质
+    canvasRenderer.materialCount = 1;
+    canvasRenderer.SetMaterial(materialForRendering, 0);  // 经过 IMaterialModifier 链的最终材质
     canvasRenderer.SetTexture(mainTexture);      // 设置主纹理
 }
 ```
@@ -152,18 +158,23 @@ private void UpdateMaterial()
 ### 8.3.3 Graphic 保存对 CanvasRenderer 的引用
 
 ```csharp
-// Graphic.cs 中的字段
-protected CanvasRenderer m_CanvasRenderer;
-
-// 在 Awake/OnEnable 中获取引用
-protected override void Awake()
+// Graphic.cs（UGUI main）：惰性获取，首次访问时才 GetComponent / AddComponent
+public CanvasRenderer canvasRenderer
 {
-    base.Awake();
-    m_CanvasRenderer = GetComponent<CanvasRenderer>();
+    get
+    {
+        if (ReferenceEquals(m_CanvasRenderer, null))
+        {
+            m_CanvasRenderer = GetComponent<CanvasRenderer>();
+            if (ReferenceEquals(m_CanvasRenderer, null))
+                m_CanvasRenderer = gameObject.AddComponent<CanvasRenderer>();
+        }
+        return m_CanvasRenderer;
+    }
 }
 ```
 
-`canvasRenderer` 属性（C# 属性）暴露 `m_CanvasRenderer` 字段给子类使用。
+main 中 `Graphic` **不在 Awake 里主动获取** CanvasRenderer——通过上面的惰性属性，首次访问（通常是 `UpdateMaterial()` / `DoMeshGeneration()` 时）才创建。这与第 5 章 5.8.1 的描述一致。
 
 ### 8.3.4 Graphic 生命周期中的 CanvasRenderer 操作
 
@@ -391,7 +402,7 @@ SetVerticesDirty() ──→ CanvasUpdateRegistry  │
 | 方面 | 说明 |
 |------|------|
 | 命名空间 | `UnityEngine`（不是 `UnityEngine.UI`） |
-| 存储位置 | Unity 引擎内置组件（UnityEngine.CoreModule） |
+| 存储位置 | Unity 引擎内置组件（UnityEngine.UIModule） |
 | 核心方法 | `extern` + `[NativeMethod]`，实现位于引擎 C++ 层 |
 | C# 侧角色 | 仅仅是"前端接口"，真正的数据存储在 Native 侧 |
 
@@ -442,3 +453,14 @@ Graphic 持有 CanvasRenderer 的引用，但 CanvasRenderer 不持有 Graphic �
   5. UpdateMaterial()   ← 理解 SetMaterial/SetTexture 的调用时机
   6. m_CanvasRenderer   ← 理解引用建立的方式
 ```
+
+---
+
+## 勘误汇总（对照 uGUI main）
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🔴 | 8.3.1 | `UpdateGeometry()` 内有 `m_VertsDirty` / `m_DirtyVerts` 分支和 `DoMeshUpdate()` 增量路径 | main 中不存在 `m_DirtyVerts` / `DoMeshUpdate`；dirty 判断在 `Graphic.Rebuild` 的 `PreRender` 分支，`UpdateGeometry()` 只调用 `DoMeshGeneration()` |
+| 2 | 🟡 | 8.3.2 | `canvasRenderer.SetMaterial(material, 0)` | main 使用经过 `IMaterialModifier` 链的 `materialForRendering`，并先设置 `materialCount = 1` |
+| 3 | 🟡 | 8.3.3 | `Graphic` 在 `Awake` 中获取 `CanvasRenderer` 引用 | main 用惰性 `canvasRenderer` 属性，首次访问时 `GetComponent` / `AddComponent` |
+| 4 | 🟡 | 8.2.1 / 8.8.1 | CanvasRenderer 位于 `UnityEngine.CoreModule` | 属 `UnityEngine.UIModule` |

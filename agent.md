@@ -93,7 +93,8 @@ UGUI-code-Analyse/
 
 - 开源部分：GitHub 仓库 `Unity-Technologies/uGUI`，**以 main 分支为准**。当前 main 为 `com.unity.ugui` 包结构（`Runtime/UGUI/UI/Core/`、`Runtime/UGUI/EventSystem/`）；旧分支（如 2019.1）为 `UnityEngine.UI/UI/`。
 - **存疑仲裁规则（AGENTS.md 强制）**：对任何 UGUI 机制、类、方法、路径或行为不确定对错时，先到 https://github.com/Unity-Technologies/uGUI/tree/main 核实再作答或修改，不得凭记忆或二手资料下结论。
-- **引擎内置、不在 uGUI 仓库中的组件**：`Canvas`、`CanvasRenderer`、`RectTransform`、`RectTransformUtility`、`TextGenerator` 等，位于 `UnityEngine.CoreModule`，核心方法标记 `[NativeMethod]`（如 `Canvas.BuildBatch`），C# 侧看不到实现。`UIVertex` 同样不在仓库内，属 `UnityEngine.UIModule` 引擎类型（Unity 6 起含 `prevPosition` 字段，uGUI main 经 TEXCOORD4 通道读写）。
+- **引擎内置、不在 uGUI 仓库中的组件**：`Canvas`、`CanvasRenderer`、`RectTransformUtility`、`UIVertex`、`TextGenerator`、`RenderMode` 等属 `UnityEngine.UIModule`（`RectTransform` 属 `UnityEngine.CoreModule`），核心方法标记 `[NativeMethod]`（如 `Canvas.BuildBatch`），C# 侧看不到实现。`UIVertex` 在 Unity 6 起含 `prevPosition` 字段，uGUI main 经 TEXCOORD4 通道读写。
+- **TextMeshPro 不在 uGUI 仓库中**：TMP 是独立包 `com.unity.textmeshpro`（源码仓库 Unity-Technologies/TextMeshPro），源码路径为 `Scripts/Runtime/...`。
 - `EventSystem` 在 uGUI 仓库中与 `UI/Core` **同级**（`EventSystem/` 目录），不在 Core 内部。
 - `UI-Default.shader` 等 UI Shader 是引擎内置资源，不在 C# 仓库中。
 - 凡依赖"反推 / 官方文档 / Frame Debugger 观察"的结论，正文通常会注明验证方式，引用时不要升级为"源码证实"。
@@ -107,6 +108,7 @@ UGUI-code-Analyse/
 3. **模板不完整**：部分章节（尤其合并/新增章节）缺「勘误汇总」或「源码阅读路径」段。
 4. **历史文档**：`_阅读指南/整体结构分析（历史存档）.md` 已过时，仅作追溯，勿当现状。
 5. ~~重构未提交~~ **已提交**：四部分目录、合并与编号统一的重构已作为独立提交落库（`4dd6929`），工作区干净；后续内容勘误（如 02/05 章 VertexHelper 按 main 修正）单独提交。
+6. **源码一致性审计（2026-08）**：已对照 uGUI main 与官方文档修正第 01/03/04/06/08/09/16/17/19 章的同类问题（引擎归属、编造 API、UIVertex 大小、TMP 归属、TextGenerator 方法名等），完整清单见 `_阅读指南/源码一致性审计报告.md`。
 
 ---
 

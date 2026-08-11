@@ -61,17 +61,19 @@ public abstract class BaseMeshEffect : UIBehaviour, IMeshModifier
 }
 ```
 
-**重要**：继承 BaseMeshEffect 时，当组件启用/关闭/参数变化，必须通知 Graphic 重新生成 Mesh：
+**重要**：`BaseMeshEffect` 本身已经在 `OnEnable` / `OnDisable` / `OnDidApplyAnimationProperties` 中调用了 `graphic.SetVerticesDirty()`。因此继承 `BaseMeshEffect` 时只需**保留 `base.OnEnable()` 调用链**；只有**直接实现 `IMeshModifier`**（不继承 BaseMeshEffect）的组件，才需要自己通知：
 
 ```csharp
 protected override void OnEnable()
 {
+    base.OnEnable();               // ← BaseMeshEffect 内部已调用 SetVerticesDirty()
+    // 参数变化时仍需主动标记：
     if (graphic != null)
         graphic.SetVerticesDirty();  // 标记顶点已脏，下一帧重建
 }
 ```
 
-忘记调用 `SetVerticesDirty()` 是自定义 Mesh Effect 最常见的 bug——改了参数但画面不变，因为 ModifyMesh 根本没重新执行。
+忘记通知 `SetVerticesDirty()` 是自定义 Mesh Effect 最常见的 bug——改了参数但画面不变，因为 ModifyMesh 根本没重新执行。
 
 ### 17.1.3 ModifyMesh 的标准写法
 
@@ -98,22 +100,23 @@ public override void ModifyMesh(VertexHelper vh)
 
 四个步骤：**读取 → 修改 → 清空 → 写回**。
 
-**关于 GC 压力**：这段代码每次调用都会 `new List<UIVertex>()`——这是自定义 Mesh Effect 最常见的性能陷阱。`UIVertex` 结构体包含 8 个字段（position、normal、tangent、color、uv0~uv3），约 **52 字节**。一个文本 1000 个顶点，Outline 处理后变成 5000 个顶点，单次分配就是 5000×52 ≈ 260KB。如果频繁触发 `SetVerticesDirty()`，GC 压力会非常明显。
+**关于 GC 压力**：这段代码每次调用都会 `new List<UIVertex>()`——这是自定义 Mesh Effect 最常见的性能陷阱。`UIVertex` 结构体包含 9 个字段（position、normal、tangent、color、uv0~uv3、prevPosition），共 **124 字节**，IL2CPP 下对齐后约 **128 字节**（见第 2 章 2.7）。一个文本 1000 个顶点，Outline 处理后变成 5000 个顶点，单次分配就是 5000×128 ≈ **640KB**。如果频繁触发 `SetVerticesDirty()`，GC 压力会非常明显。
 
-**优化方案**：将 `List<UIVertex>` 缓存为类成员字段，每次 `Clear()` 复用：
+**优化方案（main 官方写法）**：使用 `ListPool<UIVertex>.Get() / Release()` 复用列表（main 的 Shadow / Outline 就是这么做的）：
 
 ```csharp
-private List<UIVertex> m_Verts = new List<UIVertex>();
-
 public override void ModifyMesh(VertexHelper vh)
 {
-    m_Verts.Clear();
-    vh.GetUIVertexStream(m_Verts);  // 复用已有列表
+    var verts = ListPool<UIVertex>.Get();
+    vh.GetUIVertexStream(verts);
     // ... 修改 ...
     vh.Clear();
-    vh.AddUIVertexTriangleStream(m_Verts);
+    vh.AddUIVertexTriangleStream(verts);
+    ListPool<UIVertex>.Release(verts);  // 归还池，零 GC 分配
 }
 ```
+
+如果不想引入对象池，也可以把 `List<UIVertex>` 缓存为类成员字段、每次 `Clear()` 复用——注意列表不得跨帧持有。
 
 ### 17.1.4 CPU 顶点修改 vs Shader 特效
 
@@ -141,7 +144,7 @@ Shadow 不修改原始顶点——它**复制**一份，偏移位置，改颜色
 ```csharp
 public override void ModifyMesh(VertexHelper vh)
 {
-    List<UIVertex> verts = new List<UIVertex>();
+    var verts = ListPool<UIVertex>.Get();   // main 官方写法，避免每次 new
     vh.GetUIVertexStream(verts);
 
     int originalCount = verts.Count;  // ⚠ 必须提前缓存
@@ -162,8 +165,11 @@ public override void ModifyMesh(VertexHelper vh)
 
     vh.Clear();
     vh.AddUIVertexTriangleStream(verts);
+    ListPool<UIVertex>.Release(verts);
 }
 ```
+
+> 说明：上面的 `ListPool` 写法与 main 的 `Shadow.cs` 一致；为便于理解，省略了 `IsActive()` 判断等细节。
 
 效果：
 
@@ -182,7 +188,7 @@ Outline 继承自 Shadow，向**多个方向**重复复制顶点：
 ```csharp
 public override void ModifyMesh(VertexHelper vh)
 {
-    List<UIVertex> verts = new List<UIVertex>();
+    var verts = ListPool<UIVertex>.Get();   // 与 main 的 Outline.cs 一致
     vh.GetUIVertexStream(verts);
 
     int originalCount = verts.Count;
@@ -199,6 +205,7 @@ public override void ModifyMesh(VertexHelper vh)
 
     vh.Clear();
     vh.AddUIVertexTriangleStream(verts);
+    ListPool<UIVertex>.Release(verts);
 }
 ```
 
@@ -288,7 +295,7 @@ GetComponents<IMeshModifier>()   → 1 次数组分配
 
 ### 17.3.3 优化建议
 
-1. **缓存 `List<UIVertex>`**：声明为类字段，每次 `Clear()` 复用，避免 new 分配
+1. **用 `ListPool<UIVertex>` 或缓存列表**：main 官方做法是 `ListPool.Get()/Release()` 复用（Shadow/Outline 即如此）；也可声明类字段 + `Clear()` 复用，避免每次 new 分配
 2. **减少特效层数**：特别是 Outline + Shadow 同时使用时，评估是否真正需要
 3. **Text 用 Shader 替代 Mesh Effect**：Text 顶点基数大，Mesh Effect 的乘法效应太严重——能用 Shader 做描边/阴影就优先用 Shader
 4. **避免每帧 SetVerticesDirty**：动态内容用缓存判断内容是否真的变了再标记 Dirty
@@ -325,8 +332,11 @@ UI Mesh 扩展机制本质上是一条**可编程几何流水线**。它让 UGUI
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
-| 1 | 🟡 中等 | 全文 | 未提及 `GetUIVertexStream()` 每次调用 new List 的 GC 分配问题 | 每次 ModifyMesh 调用都分配 List，UIVertex 约 52 字节，多层特效 + 高频重建时 GC 压力显著。应缓存 List 为成员变量 |
+| 1 | 🟡 中等 | 全文 | 未提及 `GetUIVertexStream()` 每次调用 new List 的 GC 分配问题 | 每次 ModifyMesh 调用都分配 List，UIVertex 约 124~128 字节（9 字段），多层特效 + 高频重建时 GC 压力显著。应用 `ListPool` 复用（main 官方写法） |
 | 2 | 🟡 中等 | 全文 | 未提及 `GetComponents<IMeshModifier>()` 每次 Graphic 重建时的数组分配 | `GetComponents` 在每次重建时分配数组，这也是一个频繁触发的 GC 点 |
-| 3 | 🟢 轻微 | 17.3.2 | "UIVertex 是结构体，因此发生了值复制" | 正确，但未说明 UIVertex 约 52 字节。几千个顶点的结构体复制本身就有可观的 CPU 缓存压力，不仅仅是 GC 问题 |
+| 3 | 🟢 轻微 | 17.3.2 | "UIVertex 是结构体，因此发生了值复制" | 正确，但未说明 UIVertex 约 124~128 字节。几千个顶点的结构体复制本身就有可观的 CPU 缓存压力，不仅仅是 GC 问题 |
 | 4 | 🟢 轻微 | 17.3.3 / 17.3.5 / 17.4.3 | 顶点爆炸数字（4→8→40、Text 1000→Shadow 2000→Outline 5000）在三节中重复出现 | 同一组数字反复出现，仅上下文不同 |
 | 5 | 🟢 轻微 | 17.1.4 / 17.4.6 | "CPU Mesh 修改与 Shader 的区别"与"优先使用 Shader 特效" | 两个节都在对比 CPU vs Shader，论点相同 |
+| 6 | 🔴 严重 | 17.1.3 / 17.3.2 | UIVertex 是 8 个字段、约 52 字节 | Unity 6 / main 为 9 个字段（含 `prevPosition`），共 124 字节，IL2CPP 对齐后约 128 字节 |
+| 7 | 🟡 中等 | 17.1.2 | 继承 BaseMeshEffect 时必须在 OnEnable 手动调用 `SetVerticesDirty()` | `BaseMeshEffect` 已自动处理；只需保留 `base.OnEnable()`。直接实现 `IMeshModifier` 才需要自己通知 |
+| 8 | 🟡 中等 | 17.1.3 / 17.3.3 | 优化方案为缓存成员 `List<UIVertex>` | main 官方写法是 `ListPool<UIVertex>.Get()/Release()`（Shadow/Outline 即如此），成员字段缓存只是替代方案 |

@@ -111,6 +111,8 @@ UGUI 不会将每个 UI 元素单独提交给 GPU。所有 UI 元素先由 Canva
 
 **"精确匹配"的含义**：不是"看起来一样就行"，必须是**同一个内存对象**。
 
+> 以上条件依据 Unity 官方文档与 Frame Debugger 观察总结——合批规则在引擎 Native 层实现，C# 侧无源码。
+
 ### 9.3.2 Material 实例匹配
 
 两个 Image 使用相同的材质球（同一个 Material 实例拖到 Inspector 上）才能合批。如果分别复制出两个材质球，即使参数完全一样，也**算作不同材质实例**，会打断 Batch。
@@ -158,9 +160,9 @@ MatB.DisableKeyword("UI_GRAY");
 
 ### 9.3.5 Additional Shader Channels
 
-UGUI 的 CanvasRenderer 可以决定向 Shader 传递哪些顶点数据通道（Position、Normal、Tangent、Color、UV1~UV3）。同一个 Canvas 下的所有 CanvasRenderer 必须使用一致的通道设置，否则会打断 Batch。
+Canvas 的顶点布局由 `Canvas.additionalShaderChannels` 统一声明（Position / Normal / Tangent / Color / TexCoord0~3），同一 Canvas 下的所有元素共用这一套布局。main 的 `VertexHelper.FillMesh` 固定按 9 通道写入（见第 2 章），引擎 Batch 时按 Canvas 的通道配置读取数据。
 
-默认情况下，UGUI 通过 `Graphic.GetModifiedMesh()` 计算需要哪些通道。当使用 Position + Color + UV0 就满足所有 UI 元素时，不会开启额外通道。一旦某个元素需要 Normal/Tangent/UV2，整个 Canvas 的通道设置就会升级，可能导致 Batch 重新划分。
+默认配置（Position + Color + TexCoord0）已满足大多数 UI 元素，不会开启额外通道。一旦某个元素需要 Normal / Tangent / UV2 等额外数据（如 TMP 的 SDF 参数、自定义 Shader），就需要相应开启 `additionalShaderChannels`，否则数据不会传递到 Shader。通道配置影响"数据是否送达 Shader"，不直接决定能否合批——合批仍以材质、纹理、Shader 状态为准（行为依据：Unity 官方文档 `Canvas.additionalShaderChannels`；main 中不存在 `Graphic.GetModifiedMesh()` 方法）。
 
 ---
 
@@ -376,3 +378,11 @@ DrawCall 降低到极致（追求 0~1 个 DrawCall）不一定是最优解。不
 ### 一句话概括
 
 > **批处理是 UGUI 自动执行的 DrawCall 合并机制，其核心在于降低 CPU 向 GPU 提交渲染状态切换的开销——合批成功的关键是材质、纹理、Shader 三者的精确匹配。**
+
+---
+
+## 勘误汇总（对照 uGUI main 与官方文档）
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🔴 | 9.3.5 | UGUI 通过 `Graphic.GetModifiedMesh()` 计算需要哪些顶点通道 | main 中不存在该方法；顶点布局由 `Canvas.additionalShaderChannels` 统一声明，`VertexHelper.FillMesh` 固定按 9 通道写入 |
