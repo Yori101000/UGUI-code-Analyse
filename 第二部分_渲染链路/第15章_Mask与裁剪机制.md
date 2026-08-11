@@ -450,6 +450,17 @@ PC 编辑器 GPU 性能充足 → Stencil Mask 开销几乎无感 → 容易误�
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+Mask.cs → GetModifiedMaterial（Stencil）
+StencilMaterial.cs → Add（按参数缓存材质副本）
+RectMask2D.cs → EnableRectClipping
+Culling/ClipperRegistry.cs → Cull()；IClippable / IClipper
+```
+
+---
+
 ## 本章总结
 
 ```

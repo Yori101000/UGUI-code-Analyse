@@ -210,6 +210,15 @@ DOTween 的性能优势完全来自**对象池 + 委托 + 全局驱动**这三�
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+DOTween 是第三方库（Demigiant/DOTween），无 UGUI 源码；
+对接点：Tween 修改属性 → 属性 setter 触发 SetVerticesDirty → CanvasUpdateRegistry 重建（第 4/5 章）。
+```
+
+---
+
 ## 本章总结
 
 ```
@@ -227,3 +236,11 @@ UGUI 集成要点：
   DOSizeDelta 触发 Layout Rebuild（避免）
   OnHide 时 DOKill（避免无效更新）
 ```
+
+---
+
+## 勘误汇总
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🟢 | 全文 | — | 本章以 DOTween 第三方库为准，无 UGUI 源码级事实声明 |

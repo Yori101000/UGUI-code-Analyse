@@ -532,6 +532,17 @@ Device Layer（鼠标/键盘/手柄/触摸）
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+EventSystem/EventSystem.cs → Update / RaycastAll
+EventSystem/InputModules/BaseInputModule.cs、StandaloneInputModule.cs → Process()
+UI/Core/GraphicRaycaster.cs → Raycast()
+EventSystem/ExecuteEvents.cs → Execute / GetEventHandler
+```
+
+---
+
 ## 本章总结
 
 EventSystem 是 UGUI 的"输入中间层"——将多设备输入统一为 PointerEventData，通过 Raycaster 体系完成命中检测，再用 ExecuteEvents 分发给实现了特定接口的 UI 组件。

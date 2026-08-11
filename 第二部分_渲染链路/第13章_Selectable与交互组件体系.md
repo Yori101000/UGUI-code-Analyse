@@ -304,3 +304,11 @@ Slider.cs → IDragHandler 拖拽值变化
 | `OnPointerClick()` → `Press()` | Button.cs | 点击事件触发 onClick |
 | `SetIsOn(bool)` | Toggle.cs | 开关状态切换（含 ToggleGroup 通知） |
 | `OnDrag()` → `UpdateDrag()` | Slider.cs | 拖拽更新值 |
+
+---
+
+## 勘误汇总
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🟢 | 全文 | — | 本章无源码级勘误记录；状态机与过渡逻辑以 main `Selectable.cs` 为准 |

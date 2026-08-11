@@ -179,3 +179,11 @@ CanvasScaler.cs → Handle() → HandleScaleWithScreenSize()
 | `HandleConstantPhysicalSize()` | 物理尺寸模式 |
 | `SetScaleFactor(float)` | 赋值给 Canvas.scaleFactor（含去重） |
 | `SetReferencePixelsPerUnit(float)` | 赋值给 Canvas.referencePixelsPerUnit |
+
+---
+
+## 勘误汇总
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🟢 | 全文 | — | 本章无源码级勘误记录；逻辑以 main `Layout/CanvasScaler.cs` 为准 |

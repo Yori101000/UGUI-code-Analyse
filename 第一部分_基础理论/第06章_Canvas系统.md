@@ -697,6 +697,16 @@ public enum AdditionalCanvasShaderChannels
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+Canvas 是引擎内置类型（UIModule），看官方文档；
+uGUI 侧：Layout/CanvasScaler.cs（分辨率适配）、UI/Core/GraphicRaycaster.cs（Canvas 相关射线检测）、
+CanvasUpdateRegistry.cs（订阅 Canvas.willRenderCanvases）。
+```
+
+---
+
 ## 本章总结
 
 ### Canvas的核心地位

@@ -504,6 +504,16 @@ fixed4 frag(v2f IN) : SV_Target
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+UI-Default.shader（引擎内置：Data/Resources/BuiltinShaders/）
+Stencil 注入来源：Mask.cs + StencilMaterial.cs
+顶点通道：VertexHelper.FillMesh 的 9 通道布局（第 2 章 2.4）
+```
+
+---
+
 ## 本章总结
 
 ```

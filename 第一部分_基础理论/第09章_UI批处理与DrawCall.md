@@ -352,6 +352,16 @@ DrawCall 降低到极致（追求 0~1 个 DrawCall）不一定是最优解。不
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+合批规则在引擎 Native 层（Canvas.BuildBatch），C# 侧无源码；
+UI 侧对照：Graphic.materialForRendering / GetModifiedMaterial、StencilMaterial.cs、Mask.cs、RectMask2D.cs。
+验证工具：Frame Debugger 逐 DrawCall 查看断批原因。
+```
+
+---
+
 ## 9.9 本章总结
 
 ### 核心要点

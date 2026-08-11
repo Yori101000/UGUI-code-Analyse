@@ -699,6 +699,17 @@ CircleGraphic.SetRadius(100)
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+Graphic.cs → SetVerticesDirty / Rebuild / DoMeshGeneration / UpdateGeometry / UpdateMaterial
+MaskableGraphic.cs → GetModifiedMaterial（Stencil 注入）
+Image.cs / RawImage.cs / Text.cs → OnPopulateMesh 三种实现
+VertexModifiers/IMeshModifier.cs → ModifyMesh 链
+```
+
+---
+
 ## 5.10 本章总结
 
 ### 核心要点
@@ -740,3 +751,12 @@ CircleGraphic.SetRadius(100)
 - [ ] 一个 Image 生成 Quad 时，需要几个顶点？几个三角形？几个索引？
 - [ ] CanvasRenderer 和 Graphic 的分工是什么？
 - [ ] 自定义 UI 组件时，需要重写哪个方法？修改属性后调用哪个方法通知重建？
+
+---
+
+## 勘误汇总
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🟡 | 5.5.3 | 旧版本（2018 及更早）每帧 `new VertexHelper()` 的对比描述 | 已按 main 简化：静态共享 `s_VertexHelper`（`Allocator.Domain`）+ `workerMesh`，细节见第 2 章 2.4~2.7 |
+| 2 | 🟡 | 5.7 | VertexHelper 内部结构与 `Clear()` 语义 | 已与第 2 章对齐：NativeArray 单流存储、`Clear()` 只重置计数（见 2.4 / 2.7.2） |

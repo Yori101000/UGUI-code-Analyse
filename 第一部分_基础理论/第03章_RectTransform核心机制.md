@@ -436,6 +436,15 @@ dragItem.anchoredPosition = localPoint;
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+RectTransform / RectTransformUtility 是引擎内置类型（官方文档），uGUI 仓库内无 C# 实现。
+阅读方式：官方文档 API → 在 uGUI 仓库搜索 `RectTransformUtility.`（GraphicRaycaster.cs、Scrollbar.cs 等）看真实调用。
+```
+
+---
+
 ## 总结
 
 RectTransform 是 UGUI 整个布局和渲染系统的空间基础：
