@@ -328,6 +328,15 @@ UI Mesh 扩展机制本质上是一条**可编程几何流水线**。它让 UGUI
 
 ---
 
+### 推荐的源码阅读路径
+
+```
+IMeshModifier.cs → BaseMeshEffect.cs → Shadow.cs → Outline.cs → PositionAsUV1.cs
+配合 VertexHelper.GetUIVertexStream / AddUIVertexTriangleStream 阅读
+```
+
+---
+
 ## 勘误汇总
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |

@@ -556,157 +556,25 @@ Text 的重建有一个额外的影响：当文本内容变化时，除了 `SetV
 
 ## 5.7 VertexHelper —— 顶点构建工具类
 
-`VertexHelper` 是 `OnPopulateMesh` 中使用的核心工具类，它封装了顶点数据的收集过程。
+`VertexHelper` 是 `OnPopulateMesh` 的唯一参数，负责收集顶点数据。它的**内部数据结构**（`NativeArray<UIVertex>` 单流存储、`Clear()` 只重置计数、9 通道 `FillMesh` 单流上传、65000 顶点上限、`Dispose` 与 `Clear` 的区别）在第 2 章 2.4~2.7 已完整展开，本章不重复。这里只强调它在 Graphic 流程中的三个使用要点：
 
-### 5.7.1 VertexHelper 的职责
+1. **填充前先 `Clear()`**：`Graphic` 的 `s_VertexHelper` 是静态共享实例，`Clear()` 只重置计数、旧数据还在数组里。Image/Text 等子类都在自己的 `OnPopulateMesh` 开头调用 `vh.Clear()`，自定义 Graphic 也必须这样做，否则会在上次的顶点后面追加。
+2. **`ModifyMesh` 链在同一实例上叠加**：`DoMeshGeneration()` 生成顶点后，逐个调用 `IMeshModifier.ModifyMesh(s_VertexHelper)`（Shadow/Outline 等），后一个效果读取的是前一个效果的输出（第 17 章）。
+3. **不要在子类里手动 `FillMesh`/`SetMesh`**：填充与提交由 `Graphic` 统一完成（`s_VertexHelper.FillMesh(workerMesh)` → `canvasRenderer.SetMesh(workerMesh)`，见 5.5.3），子类只需负责往 `vh` 里写顶点。
 
-```
-VertexHelper 的作用：
-  收集顶点数据 → 整理为 Mesh 可接受的格式 → 填充到 Mesh
-```
-
-```csharp
-// VertexHelper.cs（UGUI main，路径：Runtime/UGUI/UI/Core/Utility/VertexHelper.cs）
-public class VertexHelper : IDisposable {
-    private NativeArray<UIVertex> m_Verts;    // 顶点流（AoS 交错存储）
-    private NativeArray<ushort>   m_Indices;  // 三角形索引
-
-    private int m_VertCount;     // 当前顶点数
-    private int m_IndexCount;    // 当前索引数
-    private int m_VertCapacity;  // 顶点容量（按 2 的幂增长）
-    private int m_IndexCapacity; // 索引容量
-
-    const int k_InitialVertCapacity  = 64;   // 初始顶点容量
-    const int k_InitialIndexCapacity = 96;   // 初始索引容量
-    const int k_MaxVertCount = 65000;        // 顶点数上限
-}
-```
-
-注意：**当前 main 使用 NativeArray 单流（AoS）存储**，`UIVertex` 的字段顺序与 GPU 顶点布局一一对应（Position / Normal / Tangent / Color / TexCoord0~3 / TexCoord4=prevPosition），`FillMesh` 用一次 `SetVertexBufferData` 就能整体上传。旧版本曾用 9 个并行 `List` 逐通道存储，本章以 main 为准。
-
-`VertexHelper` 维护的顶点流覆盖了 Mesh 需要的全部顶点属性。这些数据最终会被写入到一个 `Mesh` 对象中。
-
-### 5.7.2 核心方法
-
-#### AddVert —— 添加一个顶点
+一个最小写入模式（完整自定义示例见 5.9）：
 
 ```csharp
-// VertexHelper.cs（UGUI main）
-// 方式一：指定位置、颜色、UV（注意 uv0 是 Vector4）
-public void AddVert(Vector3 position, Color32 color, Vector4 uv0) {
-    AddVert(position, color, uv0, Vector4.zero, s_DefaultNormal, s_DefaultTangent);
-    // 未指定的通道用默认值：normal=(0,0,-1)、tangent=(1,0,0,-1)、prevPosition=0
-}
-
-// 方式二：直接添加一个 UIVertex 结构体
-public void AddVert(UIVertex v) {
-    EnsureVertCapacity(m_VertCount + 1);
-    m_Verts[m_VertCount++] = v;
+protected override void OnPopulateMesh(VertexHelper vh)
+{
+    vh.Clear();                       // 1. 重置共享实例的计数
+    vh.AddVert(...);                  // 2. 写入顶点
+    vh.AddTriangle(...);              //    写入索引
+    // 3. 结束：由 Graphic 统一 FillMesh + SetMesh
 }
 ```
 
-注意，`AddVert` 不会自动追踪当前顶点的索引编号——调用者需要按添加顺序记住索引号，以便在 `AddTriangle` 中引用。
-
-#### AddTriangle —— 添加一个三角形
-
-```csharp
-// VertexHelper.cs（UGUI main）
-public void AddTriangle(int idx0, int idx1, int idx2) {
-    EnsureIndexCapacity(m_IndexCount + 3);
-    m_Indices[m_IndexCount + 0] = (ushort)idx0;
-    m_Indices[m_IndexCount + 1] = (ushort)idx1;
-    m_Indices[m_IndexCount + 2] = (ushort)idx2;
-    m_IndexCount += 3;
-}
-```
-
-三个参数分别对应三角形的三个顶点在顶点流中的索引值（内部以 `ushort` 存储）。注意：UGUI 的 UI Shader（`UI/Default`）设置了 `Cull Off`，因此顶点绕序对 UI 渲染无影响——正反面都可见。但在自定义 Shader 未关闭 Cull 时，需保证绕序正确（Unity 中默认正面为顺时针绕序）。
-
-#### FillMesh —— 填充到 Mesh
-
-```csharp
-// VertexHelper.cs（UGUI main）
-public void FillMesh(Mesh mesh) {
-    if (m_VertCount >= k_MaxVertCount)
-        throw new ArgumentException("Mesh can not have more than 65000 vertices");
-
-    if (m_VertCount == 0 || m_IndexCount == 0) { mesh.Clear(); return; }
-
-    // 9 通道单流布局：Position/Normal/Tangent/Color/TexCoord0~3/TexCoord4(prevPosition)
-    mesh.SetVertexBufferParams(m_VertCount, s_VertexLayout);
-    mesh.SetIndexBufferParams(m_IndexCount, IndexFormat.UInt16);
-    mesh.SetVertexBufferData(m_Verts, 0, 0, m_VertCount, 0, k_BypassFlags);
-    mesh.SetIndexBufferData(m_Indices, 0, 0, m_IndexCount, k_BypassFlags);
-
-    mesh.SetSubMesh(0, new SubMeshDescriptor(0, m_IndexCount, MeshTopology.Triangles)
-    {
-        firstVertex = 0,
-        vertexCount = m_VertCount,
-    }, k_BypassFlags);
-    mesh.RecalculateBounds();
-}
-```
-
-#### Clear —— 清空数据
-
-```csharp
-// VertexHelper.cs（UGUI main）
-public void Clear() {
-    m_VertCount = 0;   // 只重置计数
-    m_IndexCount = 0;
-}
-```
-
-> ⚠ **勘误 #2**：部分资料将 `Clear()` 描述为"清空所有列表"，这在当前 main 中是不准确的。main 的 `VertexHelper.Clear()` **只重置 `m_VertCount` / `m_IndexCount` 两个计数**，NativeArray 容量保留、旧数据等待被下次填充覆盖；只有 `Dispose()` 才释放原生内存。
-
-### 5.7.3 一个完整的 Quad 生成示例
-
-```csharp
-// 手动创建一个覆盖 RectTransform 的 Quad
-void GenerateQuad(VertexHelper vh, Rect rect, Color32 color) {
-    vh.Clear();
-
-    // 添加四个顶点
-    vh.AddVert(new Vector3(rect.xMin, rect.yMin, 0), color, new Vector4(0, 0, 0, 0));  // 0: 左下
-    vh.AddVert(new Vector3(rect.xMin, rect.yMax, 0), color, new Vector4(0, 1, 0, 0));  // 1: 左上
-    vh.AddVert(new Vector3(rect.xMax, rect.yMax, 0), color, new Vector4(1, 1, 0, 0));  // 2: 右上
-    vh.AddVert(new Vector3(rect.xMax, rect.yMin, 0), color, new Vector4(1, 0, 0, 0));  // 3: 右下
-
-    // 两个三角形
-    vh.AddTriangle(0, 1, 2);  // 左下 → 左上 → 右上
-    vh.AddTriangle(2, 3, 0);  // 右上 → 右下 → 左下
-}
-```
-
-生成的拓扑结构：
-
-```
-  1 ─────── 2           1 ─────── 2
-  │         │            │  ╲     │
-  │         │     →      │   ╲    │
-  │         │            │    ╲   │
-  0 ─────── 3           0 ─────── 3
-  四个顶点               两个三角形（6 个索引）
-```
-
-### 5.7.4 VertexHelper 的 IDisposable
-
-`VertexHelper` 实现了 `IDisposable` 接口。在 main 中，`Graphic` 使用**静态共享**的 `s_VertexHelper`（`new VertexHelper(Allocator.Domain)`），`DoMeshGeneration` 不再每帧创建/释放实例；`Dispose()` 负责真正释放两个 NativeArray：
-
-```csharp
-// VertexHelper.cs（UGUI main）
-public void Dispose() {
-    if (m_Verts.IsCreated)   m_Verts.Dispose();
-    if (m_Indices.IsCreated) m_Indices.Dispose();
-
-    m_VertCount = 0;
-    m_IndexCount = 0;
-    m_VertCapacity = 0;
-    m_IndexCapacity = 0;
-}
-```
-
-`Dispose()` 与 `Clear()` 不同：`Clear()` 只重置计数、保留内存，`Dispose()` 才归还原生内存。对用户代码而言，临时 `VertexHelper` 仍可用 `using` 管理生命周期（默认构造使用 `Allocator.Persistent`，需要显式释放）。
+> ⚠ **勘误 #2（保留）**：main 的 `VertexHelper.Clear()` **只重置 `m_VertCount` / `m_IndexCount` 两个计数**，NativeArray 容量保留；只有 `Dispose()` 才释放原生内存。详细语义见第 2 章 2.7.2。
 
 ---
 

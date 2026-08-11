@@ -124,3 +124,19 @@ UIDocument（Panel Settings）
 - UGUI 在 UI Toolkit 之上渲染（Sorting Order 控制）
 - 两者间不能合批
 - 事件系统互不干扰（UGUI 用 EventSystem，UI Toolkit 用 UIDocument）
+
+---
+
+## 勘误汇总
+
+| # | 严重程度 | 章节 | 原文声称 | 实际情况 |
+|---|---------|------|---------|---------|
+| 1 | 🟢 | 全文 | — | 本章无源码级勘误记录；UI Toolkit 属独立系统 `com.unity.ui`，对比结论以官方文档为准（见 `_阅读指南/源码一致性审计报告.md`） |
+
+### 推荐的源码阅读路径
+
+```
+UI Toolkit 不是 uGUI：源码在引擎内置包 com.unity.ui（UnityCsReference/UIElements）。
+对照阅读：VisualElement vs RectTransform+Graphic、PanelSettings/UIDocument vs Canvas、
+EventDispatcher vs EventSystem、Flexbox vs LayoutGroup。
+```

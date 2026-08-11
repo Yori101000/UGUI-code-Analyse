@@ -36,11 +36,11 @@ UGUI-code-Analyse/
 
 | 章 | 主题 | 关键内容 |
 |---|------|---------|
-| 01 | UGUI 整体架构 | IMGUI vs UGUI、设计特点、职责分层（组件/提交/执行）、渲染本质、系统组成全景、继承总览、一帧流转、源码结构 |
-| 02 | UI 的本质：从图形到网格 | UIVertex、VertexHelper、Image 四种网格模式、内存与 GC 代价 |
+| 01 | UGUI 整体架构 | 纯引入：IMGUI vs UGUI、五条设计取舍、数据流总览、三层职责、系统组成、阅读路线、源码结构 |
+| 02 | UI 的本质：从图形到网格 | 从 RectTransform 入手、UIVertex、VertexHelper、Image 网格模式、内存与 GC 代价 |
 | 03 | RectTransform 核心机制 | 锚点/轴心、offsetMin/Max、sizeDelta、anchoredPosition、RectTransformUtility |
 | 04 | UI 更新与重建系统 | Dirty Flag、CanvasUpdateRegistry、PerformUpdate 阶段、完整重建链路 |
-| 05 | Graphic 系统 | 继承层级、三种 Dirty、Rebuild 流程、OnPopulateMesh、自定义 Graphic 路径 |
+| 05 | Graphic 系统 | 继承层级、三种 Dirty、Rebuild 流程、OnPopulateMesh、VertexHelper 使用要点、自定义 Graphic 路径 |
 | 06 | Canvas 系统 | 三大职责、三种 RenderMode、BuildBatch、排序规则、AdditionalShaderChannels |
 | 07 | CanvasScaler 分辨率适配 | ConstantPixelSize / ScaleWithScreenSize / ConstantPhysicalSize、scaleFactor |
 | 08 | CanvasRenderer 机制 | "提交者而非生成者"、SetMesh/SetMaterial、[NativeMethod]、裁剪支持 |
@@ -105,10 +105,11 @@ UGUI-code-Analyse/
 
 1. **颗粒度不均**：第 16、19、20 章在 30KB 量级，第 07、21 章等偏小；合并产生的章节内部结构仍在演进。
 2. **《`UGUI源码导读.md`》仍按旧编号编写**：已加"结构更新"提示（含新旧对应与 TMP/URP/ScrollRect/Profiler 并入说明），待按新结构重写。
-3. **模板不完整**：部分章节（尤其合并/新增章节）缺「勘误汇总」或「源码阅读路径」段。
+3. **模板段**：合并/新增章节已补齐「源码阅读路径/勘误汇总」（02/10/16/17/20/21/24/25）；03/04/06/09/12/14/15/18/19/22/23 等非合并章节仍可后续补充（低优先级）。
 4. **历史文档**：`_阅读指南/整体结构分析（历史存档）.md` 已过时，仅作追溯，勿当现状。
 5. ~~重构未提交~~ **已提交**：四部分目录、合并与编号统一的重构已作为独立提交落库（`4dd6929`），工作区干净；后续内容勘误（如 02/05 章 VertexHelper 按 main 修正）单独提交。
 6. **源码一致性审计（2026-08）**：已对照 uGUI main 与官方文档修正第 01/03/04/06/08/09/16/17/19 章的同类问题（引擎归属、编造 API、UIVertex 大小、TMP 归属、TextGenerator 方法名等），完整清单见 `_阅读指南/源码一致性审计报告.md`。
+7. **第 1/2/5 章结构重排（2026-08）**：第 1 章改为纯引入；第 2 章从 RectTransform 入手再讲 Mesh；第 5 章 5.7 与第 2 章去重（内部结构指向 2.4~2.7）。`_阅读指南/UGUI源码导读.md` 已按新编号重写。
 
 ---
 
@@ -157,6 +158,5 @@ UGUI-code-Analyse/
 
 ## 8. 建议的后续改进（尚未实施）
 
-- 按新结构重写 `_阅读指南/UGUI源码导读.md`（补齐 02、07、13、16、20、21、24、25 等章节映射）。
-- 为合并/新增章节补全「勘误汇总 / 源码阅读路径」模板段。
-- 评估拆分偏大章节（19 特效、20 性能）或继续精简重复内容。
+- 为剩余非合并章节补「源码阅读路径 / 勘误汇总」模板段（03/04/06/09/12/14/15/18/19/22/23）。
+- 第 19/20 章维持单文件、内部按"效果/维度"分节；如需进一步瘦身，建议内部重排而非拆分文件（避免全库重编号）。

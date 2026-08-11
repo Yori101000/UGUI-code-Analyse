@@ -22,8 +22,8 @@ UGUI-code-Analyse/
 
 | 章 | 主题 | 一句话 |
 |---|------|--------|
-| 01 | UGUI 整体架构 | IMGUI vs UGUI、职责分层、系统组成、一帧流转 |
-| 02 | UI 的本质：从图形到网格 | 所有 UI 都是 Mesh，UIVertex / VertexHelper |
+| 01 | UGUI 整体架构 | 纯引入：IMGUI vs UGUI、五条设计取舍、数据流总览、系统组成、阅读路线 |
+| 02 | UI 的本质：从图形到网格 | 从 RectTransform 入手，所有 UI 都是 Mesh：UIVertex / VertexHelper |
 | 03 | RectTransform 核心机制 | 锚点、轴心、矩形计算与坐标系 |
 | 04 | UI 更新与重建系统 | Dirty 标记、CanvasUpdateRegistry、重建调度 |
 | 05 | Graphic 系统 | 顶点生成、Rebuild 流程、OnPopulateMesh |
@@ -68,7 +68,7 @@ UGUI-code-Analyse/
 ```
 第一部分：基础理论
   01 整体架构 ← 全书入口
-  ├─ 02 UI本质(Mesh) ─→ 05 Graphic ─→ 08 CanvasRenderer ─→ 09 批处理
+  ├─ 02 UI本质（从 RectTransform 入手 → Mesh）─→ 05 Graphic ─→ 08 CanvasRenderer ─→ 09 批处理
   ├─ 03 RectTransform ─→ 04 更新与重建 ─→ 09
   ├─ 06 Canvas（含 07 CanvasScaler）
 

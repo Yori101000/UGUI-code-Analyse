@@ -1,10 +1,10 @@
 # UGUI 源码导读
 
-> 本文档不是章节总结，而是**源码阅读指南**——告诉你每个知识点对应 UGUI 源码中的哪个文件、哪个类、哪个方法，以及怎么看懂它们。建议配合 UGUI 源码（Unity-Technologies/uGUI）一起阅读。
+> 本文档不是章节总结，而是**源码阅读指南**——告诉你每个知识点对应 UGUI 源码中的哪个文件、哪个类、哪个方法，以及怎么看懂它们。建议配合 UGUI 源码（Unity-Technologies/uGUI，**以 main 分支为准**）一起阅读。
 
-> ⚠️ **结构更新（2026-08）**：本书已重构为四部分 25 章，总目录见 `README.md`。本导读仍按旧章节体系编写：旧编号 N 对应新章节请查 README 目录表；其中 TMP 深度分析并入第 16 章、URP/HDRP 并入第 10 章、ScrollRect 并入第 11 章、Profiler 实战并入第 24 章。当前 uGUI main 分支为 `com.unity.ugui` 包结构（`Runtime/UGUI/UI/Core/`、`Runtime/UGUI/EventSystem/`），旧分支（如 2019.1）为 `UnityEngine.UI/UI/`。
+> ⚠️ **结构说明（2026-08）**：本书为四部分 25 章结构（见 `README.md` 目录表）。本文档按新编号 01~25 编写；TMP 深度分析在第 16 章、URP/HDRP 在第 10 章、ScrollRect 在第 11 章、Profiler 实战在第 24 章。
 
-> ⚠️ **注意**：Canvas、CanvasRenderer、RectTransformUtility、UIVertex 等是 Unity 引擎内置组件（位于 UnityEngine.UIModule，RectTransform 位于 UnityEngine.CoreModule），不在 uGUI 仓库中。它们在 C# 侧暴露了部分 API，但核心方法标记为 `[NativeMethod]`，由引擎 C++ 实现。uGUI 仓库（`UnityEngine.UI/`）主要包含 UI 组件的 C# 源码，以及事件系统（EventSystem/）。
+> ⚠️ **引擎内置类型**：`Canvas`、`CanvasRenderer`、`RectTransformUtility`、`UIVertex`、`TextGenerator`、`RenderMode` 等属 `UnityEngine.UIModule`（`RectTransform` 属 `UnityEngine.CoreModule`），**不在 uGUI 仓库中**。它们以官方文档 + 运行时反射为准。`TextMeshPro` 是独立包 `com.unity.textmeshpro`（仓库 Unity-Technologies/TextMeshPro），也不在 uGUI 仓库中。
 
 ---
 
@@ -12,1073 +12,368 @@
 
 ```
 方式一：GitHub（推荐）
-https://github.com/Unity-Technologies/uGUI
-分支选对应你的 Unity 版本
+https://github.com/Unity-Technologies/uGUI → 分支选 main
 
 方式二：Unity 包管理器
-Window → Package Manager → Unity UI → 在文件管理器中显示
+Window → Package Manager → Unity UI → 在文件管理器中显示（本地包缓存）
 ```
 
-源码核心目录结构（基于 uGUI GitHub 仓库 `2019.1` 分支）：
+main 分支核心目录结构：
 
 ```
-UnityEngine.UI/
-├── UI/
-│   ├── Core/                        ← UI 组件核心
-│   │   ├── Graphic.cs               ← Graphic 抽象基类
-│   │   ├── MaskableGraphic.cs       ← 支持 Mask 裁剪的 Graphic
-│   │   ├── Image.cs                 ← Image 组件
-│   │   ├── RawImage.cs              ← RawImage 组件
-│   │   ├── Text.cs                  ← 传统 Text 组件
-│   │   ├── Button.cs                ← Button 组件
-│   │   ├── Selectable.cs            ← 交互组件基类
-│   │   ├── Toggle.cs / ToggleGroup.cs
-│   │   ├── Slider.cs / Scrollbar.cs
-│   │   ├── Dropdown.cs / InputField.cs
-│   │   ├── ScrollRect.cs
-│   │   ├── Mask.cs / RectMask2D.cs
-│   │   ├── StencilMaterial.cs        ← Stencil 材质管理
-│   │   ├── MaskUtilities.cs
-│   │   ├── CanvasUpdateRegistry.cs   ← 重建调度核心
-│   │   ├── GraphicRegistry.cs
-│   │   ├── GraphicRaycaster.cs
-│   │   ├── FontUpdateTracker.cs
-│   │   ├── VertexHelper.cs           ← 顶点构建工具
-│   │   ├── Navigation.cs / ColorBlock.cs / SpriteState.cs
-│   │   └── ...
-│   │   ├── Layout/                   ← 布局子系统
-│   │   │   ├── LayoutGroup.cs
-│   │   │   ├── LayoutRebuilder.cs
-│   │   │   ├── HorizontalOrVerticalLayoutGroup.cs
-│   │   │   ├── GridLayoutGroup.cs
-│   │   │   ├── ContentSizeFitter.cs
-│   │   │   └── LayoutElement.cs / LayoutUtility.cs
-│   │   ├── Culling/                  ← 裁剪子系统
-│   │   │   ├── ClipperRegistry.cs
-│   │   │   └── IClippable.cs / IClipper.cs
-│   │   ├── VertexModifiers/          ← 顶点修改器
-│   │   │   ├── BaseMeshEffect.cs
-│   │   │   ├── Shadow.cs / Outline.cs
-│   │   │   └── PositionAsUV1.cs
-│   │   ├── MaterialModifiers/
-│   │   ├── SpecializedCollections/
-│   │   └── Utility/
-│   └── Animation/                    ← UI 动画支持
-│
-├── EventSystem/                      ← 事件系统（独立于 Core 之外）
-│   ├── EventSystem.cs                ← 事件系统核心
-│   ├── ExecuteEvents.cs              ← 事件分发（委托表）
-│   ├── EventData/
-│   │   └── PointerEventData.cs       ← 指针事件数据
-│   ├── InputModules/
-│   │   ├── BaseInputModule.cs
-│   │   ├── StandaloneInputModule.cs
-│   │   └── InputSystemUIInputModule.cs (新输入系统)
-│   └── Raycasters/
-│       ├── BaseRaycaster.cs
-│       ├── GraphicRaycaster.cs
-│       ├── PhysicsRaycaster.cs
-│       └── Physics2DRaycaster.cs
-│
-└── Properties/
-
-注意：
-- Canvas.cs 和 CanvasRenderer.cs 不在 uGUI 仓库中！
-  它们是 Unity 引擎内置组件，位于 UnityEngine.CoreModule
-  在 C# 侧可以看到 Canvas 和 CanvasRenderer 的部分 API，
-  但核心方法（BuildBatch 等）标记为 [NativeMethod]，由 C++ 实现
-- 事件系统（EventSystem）独立于 UI/Core 之外，
-  位于同级 EventSystem/ 目录下
+com.unity.ugui/
+└── Runtime/UGUI/
+    ├── UI/Core/                  ← UI 组件核心
+    │   ├── Graphic.cs / MaskableGraphic.cs / Image.cs / RawImage.cs / Text.cs
+    │   ├── Selectable.cs / Button.cs / Toggle.cs / Slider.cs / Scrollbar.cs / Dropdown.cs / InputField.cs
+    │   ├── Mask.cs / RectMask2D.cs / StencilMaterial.cs / MaskUtilities.cs
+    │   ├── CanvasUpdateRegistry.cs / GraphicRegistry.cs / GraphicRaycaster.cs
+    │   ├── ScrollRect.cs / FontUpdateTracker.cs
+    │   ├── Utility/              ← VertexHelper.cs（顶点构建工具）
+    │   ├── Layout/               ← LayoutGroup.cs / LayoutRebuilder.cs / CanvasScaler.cs 等
+    │   ├── Culling/              ← ClipperRegistry.cs / IClippable.cs / IClipper.cs
+    │   └── VertexModifiers/      ← IMeshModifier.cs / BaseMeshEffect.cs / Shadow.cs / Outline.cs / PositionAsUV1.cs
+    └── EventSystem/              ← 事件系统，与 UI/Core 同级
+        ├── EventSystem.cs / ExecuteEvents.cs / UIBehaviour.cs
+        ├── EventData/PointerEventData.cs
+        ├── InputModules/         ← BaseInputModule.cs / StandaloneInputModule.cs
+        └── Raycasters/           ← BaseRaycaster.cs / PhysicsRaycaster.cs / Physics2DRaycaster.cs
 ```
+
+注意：`UI-Default.shader` 等 UI Shader 是引擎内置资源（`Data/Resources/BuiltinShaders/UI-Default.shader`），不在 C# 仓库中。
 
 ---
 
-# 第一部分：基础认知（第1-4章）
+# 第一部分 基础理论（01~09）
 
-## 第1章 UGUI 整体架构
+## 第01章 UGUI 整体架构
 
-### 源码文件
+**源码文件**
 
-| 文件 | 说明 |
-|------|------|
-| `Canvas`（引擎内置） | 渲染入口，所有 UI 必须挂在 Canvas 下。位于 UnityEngine.CoreModule，不在 uGUI 仓库中 |
-| `CanvasRenderer`（引擎内置） | 每个 UI 元素对应一个，保存渲染数据。同样位于 UnityEngine.UIModule |
-| `Graphic.cs` | 所有可视 UI 的抽象基类，在 UI/Core/ 下 |
-| `RectTransform`（引擎内置） | UI 空间定义，位于 UnityEngine.CoreModule，非开源 |
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/Graphic.cs` | 可视化 UI 的抽象基类：`SetVerticesDirty` / `Rebuild` / `OnPopulateMesh` / `UpdateGeometry` |
+| `UI/Core/CanvasUpdateRegistry.cs` | 重建调度入口（`PerformUpdate`） |
+| `Canvas` / `CanvasRenderer` / `RectTransform`（引擎内置） | 渲染入口、数据容器、空间定义 |
 
-### 核心概念 vs 源码映射
+**核心概念 → 源码映射**
 
-**"保留模式（Retained Mode）" vs IMGUI 的"即时模式"**
+- "保留模式"：对比 `OnGUI()`（IMGUI，每帧执行）与 UGUI 组件在场景中持久存在、Dirty 后延迟重建。
+- "一帧数据流"：`Graphic.OnPopulateMesh` → `CanvasRenderer.SetMesh` → 引擎 `Canvas.BuildBatch` → GPU。
 
-IMGUI 在 `OnGUI()` 中每帧执行绘制代码；UGUI 则是"声明 UI 结构 → 系统在状态变化时自动更新"。
+**阅读路径**：先看 `Graphic.cs` 的 `SetVerticesDirty()` 与 `Rebuild()`，理解"标记 → 调度 → 重建"的骨架；细节交给第 04/05 章。
 
-```csharp
-// IMGUI：每帧绘制
-void OnGUI() {
-    GUI.Button(new Rect(10,10,100,50), "Click");
-}
+## 第02章 UI 的本质：从图形到网格
 
-// UGUI：声明结构，系统维护
-// 将 Button 拖到场景中 → 系统只在状态变化时重建
-```
+**源码文件**
 
-对应源码：**Graphic.cs** 中的 `SetVerticesDirty()` / `SetMaterialDirty()` / `SetLayoutDirty()`——这些方法不立即执行重建，而是打上标记，等 Canvas 统一调度。
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/Utility/VertexHelper.cs` | 顶点构建工具：`NativeArray<UIVertex>` + `NativeArray<ushort>`、`Clear()`、`AddVert/AddTriangle`、`FillMesh`（9 通道单流上传） |
+| `UIVertex`（引擎内置，UIModule） | 顶点结构体：position / normal / tangent / color / uv0~uv3 / prevPosition |
+| `UI/Core/Image.cs`、`UI/Core/Text.cs` | `OnPopulateMesh` 的两种典型实现 |
 
-### 源码阅读入口
+**核心概念 → 源码映射**
 
-打开 `Graphic.cs`，搜索以下内容建立初步认知：
+- "UI 在 GPU 眼中是 Mesh"：`Graphic.OnPopulateMesh(VertexHelper)` 就是把矩形/字符转成顶点流。
+- "RectTransform 是空间起点"：`Graphic.GetPixelAdjustedRect()` 读取 `rectTransform.rect` 生成矩形顶点。
 
-```
-1. SetVerticesDirty()     → 观察它调用了 CanvasUpdateRegistry.Register...
-2. SetMaterialDirty()     → 同上
-3. Rebuild()              → 观察它分两个阶段：UpdateGeometry + UpdateMaterial
-4. OnPopulateMesh()       → 空的虚方法，子类实现
-```
+**阅读路径**：`VertexHelper.cs`（内部存储 → `Clear` → `AddVert/AddTriangle` → `FillMesh`）→ `Image.cs OnPopulateMesh` → `Text.cs OnPopulateMesh`。
 
-### 如何验证
+## 第03章 RectTransform 核心机制
 
-```
-创建一个 Button → Game 视图 Stats 观察 Batch/Verts
-修改 Button 颜色 → 观察 Stats 变化
-打开 Profiler → 观察 Canvas.BuildBatch 的触发时机
-```
+**源码文件**：`RectTransform`（引擎内置，CoreModule）、`RectTransformUtility`（引擎内置，UIModule）。**uGUI 仓库内无 C# 实现**，uGUI 只是调用方（如 `GraphicRaycaster`、`Scrollbar.cs` 调用 `RectTransformUtility` 的坐标转换）。
 
----
+**核心概念 → API 映射**
 
-## 第2章 UI 的本质：从图形到网格
+- 锚点/轴心/offsetMin/offsetMax/sizeDelta/anchoredPosition：`RectTransform` 属性（官方文档 + 反射验证）。
+- 坐标转换：`RectTransformUtility.ScreenPointToLocalPointInRectangle` / `ScreenPointToWorldPointInRectangle` / `WorldToScreenPoint` / `ScreenPointToRay` / `PixelAdjustPoint` / `PixelAdjustRect`。
 
-### 源码文件
+**阅读路径**：官方文档 `RectTransform` → `RectTransformUtility`；再到 uGUI 仓库搜索 `RectTransformUtility.` 看真实调用场景。
 
-| 文件 | 说明 |
-|------|------|
-| `VertexHelper.cs` | 顶点构建工具，管理 List<UIVertex> |
-| `Graphic.cs` | OnPopulateMesh 的入口 |
-| `Image.cs` | Image 的 OnPopulateMesh 实现 |
+## 第04章 UI 更新与重建系统
 
-### 核心概念 vs 源码映射
+**源码文件**
 
-**"UI 在 GPU 眼中是 Mesh，不是按钮"**
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/CanvasUpdateRegistry.cs` | 单例 + `Canvas.willRenderCanvases`；`IndexedSet` 双队列；`PerformUpdate()` 分阶段执行 |
+| `UI/Core/Layout/LayoutRebuilder.cs` | 布局重建执行器（`ICanvasElement`） |
+| `UI/Core/Culling/ClipperRegistry.cs` | 裁剪更新（`ClipperRegistry.instance.Cull()`） |
 
-UGUI 中所有 UI 元素最终都生成 Mesh（顶点 + 三角形 + UV + 颜色）。
+**核心概念 → 源码映射**
 
-**UIVertex 结构体**（定义在 `VertexHelper.cs` 中）：
+- 阶段划分：Layout Rebuild 遍历 `Prelayout→Layout→PostLayout`；`ClipperRegistry.Cull()` 居中；Graphic Rebuild 遍历 `PreRender→LatePreRender`。
+- Dirty 合并：`Graphic.Rebuild(CanvasUpdate.PreRender)` 内检查 `m_VertsDirty` / `m_MaterialDirty`。
 
-```csharp
-public struct UIVertex {
-    public Vector3 position;    // 顶点位置
-    public Vector3 normal;      // 法线（UI 通常无关）
-    public Vector4 tangent;     // 切线（TMP 用到）
-    public Color32 color;       // 顶点颜色
-    public Vector4 uv0;         // 主纹理 UV
-    public Vector4 uv1;         // 额外 UV（PositionAsUV1 用）
-    public Vector4 uv2;         // 额外 UV
-    public Vector4 uv3;         // 额外 UV
-}
-```
+**阅读路径**：`CanvasUpdateRegistry.cs` 的 `PerformUpdate()` → `Graphic.cs` 的 `Rebuild()` → `LayoutRebuilder.cs`。
 
-**关键认知**：一个 Image = 4 个 UIVertex（4 个角）+ 2 个三角形（6 个索引）。
+## 第05章 Graphic 系统
 
-### 源码阅读路径
+**源码文件**
 
-```
-Image.cs → OnPopulateMesh()
-  → 根据 Image.type（Simple/Sliced/Tiled/Filled）生成不同顶点
-  → 使用 VertexHelper 添加顶点和三角形
-  → vh.AddVert(position, color, uv)
-  → vh.AddTriangle(a, b, c)
-```
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/Graphic.cs` | `SetVerticesDirty/SetMaterialDirty/SetLayoutDirty`、`Rebuild`、`DoMeshGeneration`、`UpdateGeometry/UpdateMaterial`、`materialForRendering`、`GetModifiedMaterial` |
+| `UI/Core/MaskableGraphic.cs` | Stencil 裁剪支持（`Cull`、`GetModifiedMaterial`） |
+| `UI/Core/Image.cs` / `RawImage.cs` / `Text.cs` | 三种子类实现 |
+| `UI/Core/VertexModifiers/IMeshModifier.cs` | `ModifyMesh(VertexHelper)` 顶点后处理接口 |
 
-### 如何验证
+**核心概念 → 源码映射**
 
-```csharp
-// 在某个 Image 的 Update 中观察顶点变化
-void Update() {
-    Debug.Log($"顶点数: {GetComponent<CanvasRenderer>().mesh.vertexCount}");
-}
-```
+- 三种 Dirty：顶点/材质/布局分别触发 `UpdateGeometry` / `UpdateMaterial` / 布局重算。
+- `DoMeshGeneration()`：`OnPopulateMesh(s_VertexHelper)` → `IMeshModifier` 链 → `FillMesh(workerMesh)` → `canvasRenderer.SetMesh(workerMesh)`。
 
----
+**阅读路径**：`Graphic.cs`（Dirty → Rebuild → DoMeshGeneration）→ `MaskableGraphic.cs` → `Image.cs OnPopulateMesh`。
 
-## 第3章 RectTransform 核心机制
+## 第06章 Canvas 系统
 
-### 源码文件
+**源码文件**：`Canvas`（引擎内置，UIModule）——C# 侧只有 API 壳，`BuildBatch`/`SendWillRenderCanvases` 为 native。uGUI 侧：`UI/Core/Layout/CanvasScaler.cs`、`UI/Core/GraphicRaycaster.cs`。
 
-RectTransform 的 C# 源码是引擎内置的，不在 UGUI 仓库中。但可以通过 `RectTransformUtility`（引擎内置工具类）和 `LayoutRebuilder.cs` 间接理解。
+**核心概念 → 源码映射**
 
-| 文件 | 说明 |
-|------|------|
-| `RectTransformUtility`（引擎内置） | RectTransform 的工具方法，不在 uGUI 仓库中 |
-| `LayoutRebuilder.cs` | 布局重建时调用 RectTransform 的方法 |
+- `RenderMode`（Overlay/Camera/WorldSpace）：引擎 `UnityEngine.RenderMode` 枚举。
+- `Canvas.willRenderCanvases`：`CanvasUpdateRegistry` 构造函数中订阅，是每帧重建的触发器。
 
-### 核心概念 vs API 映射
+**阅读路径**：官方文档 `Canvas` → `CanvasUpdateRegistry.cs` 的构造函数 → `CanvasScaler.cs`。
 
-**锚点（Anchor）**：`RectTransform.anchorMin` / `anchorMax`
-**轴心（Pivot）**：`RectTransform.pivot`
-**矩形信息**：`RectTransform.rect`（本地坐标）
+## 第07章 CanvasScaler 分辨率适配
 
-**关键公式**（引擎内部计算，可从 API 行为反推）：
+**源码文件**：`UI/Core/Layout/CanvasScaler.cs`。
 
-```
-anchoredPosition = 父级矩形上的锚点位置 + 偏移
-sizeDelta = 当前尺寸 - 锚点定义的尺寸
-```
+**核心概念 → 源码映射**
 
-### 源码阅读路径
+- 三种 `ScaleMode`：`ConstantPixelSize` / `ScaleWithScreenSize` / `ConstantPhysicalSize`；`HandleScaleWithScreenSize()` 按参考分辨率与 `matchWidthOrHeight` 计算 `scaleFactor`。
+- `HandleWorldCanvas()`：World Space 模式直接返回，不缩放。
 
-```
-LayoutRebuilder.cs → 搜索 LayoutRebuilder.ValidateLayout
-  → 观察它如何调用 rectTransform 的属性
-  → 理解布局系统与 RectTransform 的交互
-```
+**阅读路径**：`CanvasScaler.cs` → `HandleScaleWithScreenSize()` → 修改 `canvas.scaleFactor` 的路径。
+
+## 第08章 CanvasRenderer 机制
+
+**源码文件**：`CanvasRenderer`（引擎内置，UIModule）——`SetMesh/SetMaterial/SetTexture/SetColor/EnableRectClipping` 都是引擎 API。uGUI 侧调用点：`Graphic.cs`（`SetMesh(workerMesh)`、`UpdateMaterial()`）、`UI/Core/RectMask2D.cs`（`EnableRectClipping`）。
+
+**核心概念 → 源码映射**
+
+- "数据容器"：`Graphic` 生成数据 → `canvasRenderer.SetMesh/SetMaterial` 存入 → `Canvas.BuildBatch` 读取。
+- 裁剪：`RectMask2D` 通过 `canvasRenderer.EnableRectClipping` 设置矩形裁剪，与 `Mask` 的 Stencil 方案不同。
+
+**阅读路径**：`Graphic.cs` 搜索 `canvasRenderer.` → `RectMask2D.cs` 搜索 `EnableRectClipping`。
+
+## 第09章 UI 批处理与 DrawCall
+
+**源码文件**：合批规则在引擎 Native 层（`Canvas.BuildBatch`），C# 侧无源码。UI 侧相关：`Graphic.materialForRendering`（`GetModifiedMaterial` 链）、`UI/Core/StencilMaterial.cs`、`UI/Core/Mask.cs`、`UI/Core/RectMask2D.cs`。
+
+**核心概念 → 源码映射**
+
+- 断批原因：材质实例不同 / 纹理不同 / Stencil 状态不同 / RectMask2D 裁剪区域不同 / 跨 Canvas。
+- Stencil 注入：`Mask` → `StencilMaterial.Add()` 生成带 stencil 状态的材质副本 → 打断批次。
+
+**验证方式**：Frame Debugger（Window → Analysis）逐 DrawCall 查看断批原因。
 
 ---
 
-## 第4章 UI 更新与重建系统
+# 第二部分 渲染链路（10~19）
 
-### 源码文件
+## 第10章 UI 与渲染管线
 
-| 文件 | 说明 |
-|------|------|
-| `CanvasUpdateRegistry.cs` | **核心调度器**——这是整个 UGUI 更新系统的引擎 |
-| `Graphic.cs` | Rebuild 方法的实现 |
-| `LayoutRebuilder.cs` | Layout 重建的执行器 |
+**源码文件**：uGUI 侧无新源码；关键资源是引擎内置 `UI-Default.shader`（`Data/Resources/BuiltinShaders/`）。URP/HDRP 属于 **Unity-Technologies/Graphics** 仓库（`com.unity.render-pipelines.universal` / `.high-definition` 包），不在 uGUI 中。
 
-### 核心概念 vs 源码映射
+**核心概念 → 源码映射**
 
-**延迟重建（Deferred Rebuild）**
+- `Canvas.renderMode` 决定 UI 走哪条渲染路径；SRP 下 UI 仍由 Canvas 系统批处理提交。
+- UI Shader 关键点：`Cull Off`、`Blend One OneMinusSrcAlpha`、`ZTest [unity_GUIZTestMode]`、`Stencil` 块。
 
-```csharp
-// CanvasUpdateRegistry 的核心逻辑（简化）
-public class CanvasUpdateRegistry {
-    private List<ICanvasElement> m_LayoutRebuildQueue;
-    private List<ICanvasElement> m_GraphicRebuildQueue;
+**阅读路径**：BuiltinShaders 的 `UI-Default.shader` → Graphics 仓库中 URP 的 Canvas 支持代码。
 
-    void OnCanvasWillRenderCanvases() {
-        PerformUpdate();
-    }
+## 第11章 Layout 布局系统
 
-    public void PerformUpdate() {
-        // 阶段 0-2：Layout Rebuild
-        for (int i = 0; i <= 2; i++)
-            for each element in m_LayoutRebuildQueue
-                element.Rebuild((CanvasUpdate)i);
+**源码文件**
 
-        // 阶段 3-5：Graphic Rebuild
-        for (int i = 3; i <= 5; i++)
-            for each element in m_GraphicRebuildQueue
-                element.Rebuild((CanvasUpdate)i);
-    }
-}
-```
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/Layout/LayoutGroup.cs` | 布局容器基类：`SetLayoutHorizontal/Vertical`、`SetChildAlongAxis` |
+| `UI/Core/Layout/LayoutRebuilder.cs` | 布局重建执行器（`MarkLayoutForRebuild`、`Rebuild`） |
+| `UI/Core/Layout/ContentSizeFitter.cs` | 按子元素首选尺寸驱动自身 |
+| `UI/Core/Layout/GridLayoutGroup.cs`、`HorizontalOrVerticalLayoutGroup.cs` | 两种常用排列 |
+| `UI/Core/ScrollRect.cs` | 滚动容器（`LateUpdate` 更新位置、`MovementType` 等） |
 
-**Dirty 标记传播**：
+**核心概念 → 源码映射**：`ILayoutElement`（min/preferred/flexible）→ `LayoutRebuilder` → `SetChildAlongAxis` 写回 RectTransform。
 
-```csharp
-// Graphic.cs 中
-public virtual void SetVerticesDirty() {
-    m_VertsDirty = true;
-    CanvasUpdateRegistry.RegisterCanvasElementForGraphicRebuild(this);
-    // → 把自己加入 m_GraphicRebuildQueue
-}
-```
+**阅读路径**：`LayoutRebuilder.cs` 的 `Rebuild` → `LayoutGroup.cs` 的 `SetLayoutHorizontal/Vertical` → `ScrollRect.cs`。
 
-**完整链路**：
+## 第12章 EventSystem 事件系统
 
-```
-修改 text → Text.SetVerticesDirty()
-  → CanvasUpdateRegistry.Register...
-    → 下一帧 Canvas.SendWillRenderCanvases 触发
-      → CanvasUpdateRegistry.PerformUpdate()
-        → Graphic.Rebuild(PreRender)
-          → UpdateGeometry()
-            → OnPopulateMesh(vh)    ← 子类实现
-            → canvasRenderer.SetMesh(mesh)
-          → UpdateMaterial()
-            → canvasRenderer.SetMaterial(mat, tex)
-```
+**源码文件**
 
-### 源码阅读路径
+| 文件 | 关键内容 |
+|------|---------|
+| `EventSystem/EventSystem.cs` | 事件循环入口（`Update`、`RaycastAll`、`current`） |
+| `EventSystem/ExecuteEvents.cs` | 事件分发委托表（`GetEventHandler`、`Execute`） |
+| `EventSystem/EventData/PointerEventData.cs` | 指针事件数据 |
+| `EventSystem/InputModules/BaseInputModule.cs`、`StandaloneInputModule.cs` | 输入轮询（`Process()`） |
+| `UI/Core/GraphicRaycaster.cs`、`EventSystem/Raycasters/BaseRaycaster.cs` 等 | 命中检测 |
 
-```
-CanvasUpdateRegistry.cs → 完整看完
-  → 理解 m_LayoutRebuildQueue 和 m_GraphicRebuildQueue 的区别
-  → 理解 PerformUpdate 的阶段划分
-Graphic.cs → Rebuild() / UpdateGeometry() / UpdateMaterial()
-LayoutRebuilder.cs → Rebuild() / LayoutRebuilder.MarkLayoutForRebuild()
-```
+**核心概念 → 源码映射**：`EventSystem.Update → BaseInputModule.Process → GraphicRaycaster.Raycast → ExecuteEvents.Execute`。
 
-### 关键问题
+**阅读路径**：`EventSystem.cs` → `StandaloneInputModule.cs` 的 `Process()` → `GraphicRaycaster.cs` → `ExecuteEvents.cs`。
 
-**Q: 为什么每帧修改 `text.text = hp.ToString()` 会导致卡顿？**
-A: 每帧调用 `SetVerticesDirty()` → 每帧加入 GraphicRebuild 队列 → 每帧触发 `OnPopulateMesh` → 每帧设置 Mesh → 严重 CPU 开销。
+## 第13章 Selectable 与交互组件体系
 
----
+**源码文件**
 
-# 第二部分：渲染链路（第5-9章）
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/Selectable.cs` | 交互基类：`SelectionState` 状态机、`DoStateTransition`、`Navigation` |
+| `UI/Core/Button.cs` / `Toggle.cs` / `ToggleGroup.cs` | 点击 / 开关组件 |
+| `UI/Core/Slider.cs` / `Scrollbar.cs` / `Dropdown.cs` / `InputField.cs` | 数值与文本输入组件 |
+| `UI/Core/Navigation.cs` / `ColorBlock.cs` / `SpriteState.cs` | 过渡与导航数据 |
 
-## 第5章 Graphic 系统
+**核心概念 → 源码映射**：`Selectable` 监听 EventSystem 的指针/导航事件 → 更新 `SelectionState` → 按 Transition（Color/Sprite/Animation）驱动视觉。
 
-### 源码文件
+**阅读路径**：`Selectable.cs` 的 `OnPointerDown/Up/Enter/Exit` → `DoStateTransition` → 以 `Button.cs` 对照。
 
-| 文件 | 说明 |
-|------|------|
-| `Graphic.cs` | 抽象基类，核心渲染逻辑 |
-| `MaskableGraphic.cs` | 继承 Graphic，添加 Mask 支持 |
-| `Image.cs` | Image 的 OnPopulateMesh 实现 |
-| `VertexHelper.cs` | 顶点构建工具 |
-| `GraphicRegistry.cs` | Graphic ↔ Canvas 的映射关系 |
+## 第14章 UI 资源与图集系统
 
-### 核心概念 vs 源码映射
+**源码文件**：`Sprite`、`Texture`、`SpriteAtlas` 均为引擎类型（`UnityEngine`），**不在 uGUI 仓库**；动态图集（Dynamic Atlas）是引擎内部实现。uGUI 侧只有消费方：`Image.cs`（`sprite` 属性、`activeSprite`）、`RawImage.cs`。
 
-**Graphic 类层级**：
+**核心概念 → 源码映射**
 
-```
-UIBehaviour
-  └── Graphic（实现 ICanvasElement, IMaterialModifier, ILayoutElement）
-       └── MaskableGraphic（实现 IClippable, IMaskable）
-            ├── Image
-            ├── RawImage
-            └── Text
-```
+- `Image.sprite` → `Sprite.texture` 决定合批纹理；Tight Mesh（`Sprite` 的 `meshType`）影响顶点数。
+- 图集打包后多个 Sprite 共享同一张 Texture，是合批的基础（第 9 章）。
 
-**OnPopulateMesh**——每个子类重写此方法生成自己的网格：
+**阅读路径**：官方文档 `SpriteAtlas` → `Image.cs` 的 sprite 处理 → 用 Frame Debugger 验证合批。
 
-```csharp
-// Image.cs（简化）
-protected override void OnPopulateMesh(VertexHelper vh) {
-    vh.Clear();
-    // 根据 Image.type 生成 4 个顶点和三角形
-    AddQuad(vh, vertices, colors, uvs);
-}
-```
+## 第15章 Mask 与裁剪机制
 
-### 源码阅读路径
+**源码文件**
 
-```
-1. Graphic.cs → m_VertsDirty → SetVerticesDirty()
-   → Rebuild(CanvasUpdate.PreRender) → UpdateGeometry()
-2. Image.cs → OnPopulateMesh(vh) → 四种 ImageType 的顶点生成逻辑
-3. VertexHelper.cs → AddVert / AddTriangle / AddUIVertexStream
-```
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/Mask.cs` | Stencil 裁剪：`GetModifiedMaterial` 注入 stencil 状态 |
+| `UI/Core/RectMask2D.cs` | 矩形裁剪：`EnableRectClipping`（CanvasRenderer 侧） |
+| `UI/Core/StencilMaterial.cs` | 按 stencil 参数缓存/创建材质副本 |
+| `UI/Core/MaskUtilities.cs` | Stencil 深度分配（最多 8 层） |
+| `UI/Core/Culling/ClipperRegistry.cs`、`IClippable.cs` / `IClipper.cs` | 裁剪矩形收集与 `Cull()` |
 
----
+**核心概念 → 源码映射**：`Mask`（Stencil，断批）vs `RectMask2D`（矩形裁剪，不断批但影响批处理边界）。
 
-## 第6章 Canvas 系统
+**阅读路径**：`Mask.cs` → `StencilMaterial.cs` → `RectMask2D.cs` → `ClipperRegistry.cs`。
 
-### 源码文件
+## 第16章 文本渲染系统
 
-| 文件 | 说明 |
-|------|------|
-| `Canvas`（引擎内置） | Canvas 组件，核心调度入口。位于 UnityEngine.CoreModule，不在 uGUI 仓库 |
-| `CanvasScaler.cs` | 分辨率适配，在 UI/Core/ 下 |
+**源码文件**
 
-### 核心概念 vs 源码映射
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/Text.cs` | 传统 Text：`OnPopulateMesh` 调用 `cachedTextGenerator.PopulateWithErrors(...)`，按 Quad 写回 `VertexHelper` |
+| `UI/Core/FontUpdateTracker.cs` | 字体纹理重建跟踪（`TrackText/UntrackText`） |
+| `Font` / `TextGenerator`（引擎内置） | 字符栅格化与排版引擎（FreeType/native） |
+| TMP（独立包） | `com.unity.textmeshpro/Scripts/Runtime/`：`TMP_Text.cs`、`TextMeshProUGUI.cs`、`TMP_FontAsset.cs`、`TMP_SpriteAsset.cs`、`TMP_TextInfo.cs` 等 |
 
-**Canvas 的三种渲染模式**：对应 `Canvas.renderMode` 枚举。
+**核心概念 → 源码映射**
 
-**Canvas 的批处理**——核心方法 `Canvas.BuildBatch()` 是 **native 方法**（C++ 实现），C# 层看不到源码。但可以通过观察行为来理解：
+- 动态字体：`Font.RequestCharactersInTexture` → 引擎栅格化 → `Font.textureRebuilt` 事件 → `FontUpdateTracker` 通知 Text 重建。
+- TMP：SDF 图集 + 字符缓存，`uv2` 传 SDF 参数（需开启 Canvas 的 `additionalShaderChannels` 的 TexCoord1）。
 
-```csharp
-// Canvas.cs（C# 可见部分）
-public class Canvas : Behaviour {
-    public RenderMode renderMode;     // Overlay / Camera / WorldSpace
-    public int sortingOrder;           // 同一 Canvas 层级的排序
-    public float scaleFactor;          // CanvasScaler 修改此值
+**阅读路径**：`Text.cs OnPopulateMesh` → `FontUpdateTracker.cs` → TMP 包 `TMP_Text.cs`。
 
-    // Native 方法（看不到实现）
-    [NativeMethod] private extern void BuildBatch();
-    [NativeMethod] private extern void SendWillRenderCanvases();
-}
-```
+## 第17章 UI Mesh 扩展机制
 
-### 关键理解
+**源码文件**
 
-`Canvas.BuildBatch()` 的内部逻辑（根据反推和官方文档）：
-1. 遍历当前 Canvas 下的所有 `CanvasRenderer`
-2. 读取每个 Renderer 的 Mesh、Material、Texture
-3. 按渲染状态（材质/纹理）分组，同组合并为一个 DrawCall
-4. 提交到 GPU Command Buffer
+| 文件 | 关键内容 |
+|------|---------|
+| `UI/Core/VertexModifiers/IMeshModifier.cs` | `ModifyMesh(VertexHelper)` 接口 |
+| `UI/Core/VertexModifiers/BaseMeshEffect.cs` | 基类：自动在 `OnEnable/OnDisable/OnDidApplyAnimationProperties` 中 `SetVerticesDirty` |
+| `UI/Core/VertexModifiers/Shadow.cs` / `Outline.cs` | 顶点复制：`ListPool<UIVertex>.Get()` → `GetUIVertexStream` → 修改 → `AddUIVertexTriangleStream` → `Release` |
+| `UI/Core/Utility/VertexHelper.cs` | `GetUIVertexStream` / `AddUIVertexTriangleStream` |
+
+**阅读路径**：`IMeshModifier.cs` → `BaseMeshEffect.cs` → `Shadow.cs`（最简实现）→ `Outline.cs`（×5 顶点）。
+
+## 第18章 UI Shader 机制
+
+**源码文件**：`UI-Default.shader`（引擎内置：`Data/Resources/BuiltinShaders/`，不在 C# 仓库）；uGUI 侧 stencil 来源：`Mask.cs` + `StencilMaterial.cs`。
+
+**核心概念 → 源码映射**
+
+- `UI/Default` 关键块：`Blend One OneMinusSrcAlpha`、`Cull Off`、`ZTest [unity_GUIZTestMode]`、`Stencil` 块由 `unity_UI*` 属性驱动。
+- `CanvasRenderer` 传入的顶点通道：Position/Color/TexCoord0（+ additionalShaderChannels 的额外通道）。
+
+**阅读路径**：打开安装目录 `UI-Default.shader` 逐段对照第 18 章表格。
+
+## 第19章 UI 特效实现
+
+**源码文件**：特效以 Shader 为主，无新增 uGUI C# 源码；可参考 `UI/Core/VertexModifiers/Shadow.cs`、`Outline.cs`（CPU 顶点特效），以及引擎内置 `UI-Default.shader`（Blend/Stencil 基础）。GrabPass、模糊、溶解等为 Shader 语言/渲染管线特性。
+
+**核心概念 → 源码映射**：CPU 顶点特效（`BaseMeshEffect` 链）vs GPU 像素特效（自定义 Shader 替换 material）；后者不增加顶点、不影响合批（只要不实例化材质）。
 
 ---
 
-## 第7章 CanvasRenderer 机制
+# 第三部分 性能与工具（20~21）
 
-### 源码文件
+## 第20章 UI 性能分析
 
-| 文件 | 说明 |
-|------|------|
-| `CanvasRenderer`（引擎内置） | C# 层封装，核心方法几乎都是 native 调用。位于 UnityEngine.UIModule，不在 uGUI 仓库 |
+**源码热点映射**（无独立新源码文件，热点都在前文章节）：
 
-```csharp
-// CanvasRenderer API（引擎内置，源码不可见，以下是从 API 文档和反推整理）
-    public void SetMesh(Mesh mesh);          // 设置顶点数据
-    public void SetMaterial(Material mat, Texture tex); // 设置材质
-    public void SetColor(Color color);       // 设置颜色
-    public void EnableRectClipping(Rect rect); // RectMask2D 裁剪
-    public void DisableRectClipping();       // 关闭裁剪
-    public bool cull { get; set; }           // RectMask2D 用于剔除
-    public int absoluteDepth { get; }        // 用于排序
-}
-```
+| 性能维度 | 对应源码 |
+|---------|---------|
+| 重建调度 | `CanvasUpdateRegistry.PerformUpdate()`（第 04 章） |
+| 顶点生成 | `Graphic.DoMeshGeneration()`、`Text.OnPopulateMesh`、`VertexHelper.FillMesh`（第 02/05/16 章） |
+| 顶点膨胀 | `IMeshModifier` 链（Shadow ×2、Outline ×5）（第 17 章） |
+| 断批 | `Mask`/`StencilMaterial`、`RectMask2D`、材质实例化（第 09/15 章） |
+| 提交 | 引擎 `Canvas.BuildBatch`（第 06 章） |
 
-### 核心概念 vs 源码映射
+**验证方式**：Profiler 的 `Canvas.SendWillRenderCanvases`、`Graphic.Rebuild`、`Canvas.BuildBatch` 等采样点。
 
-**Graphic → CanvasRenderer → Canvas 的关系**：
+## 第21章 调试与分析工具
 
-```
-Graphic（生成数据）
-  → canvasRenderer.SetMesh(mesh)     ← Graphic.UpdateGeometry 中调用
-  → canvasRenderer.SetMaterial(mat)  ← Graphic.UpdateMaterial 中调用
-    → Canvas.BuildBatch() 从 CanvasRenderer 读取数据
-      → 合并 → DrawCall
-```
+**工具 → 观察点映射**（工具本身无源码）：
+
+| 工具 | 观察什么 | 对应源码概念 |
+|------|---------|-------------|
+| Frame Debugger | 每个 DrawCall 的批次与断批原因 | 第 09 章合批条件 |
+| Profiler UI Module | Rebuild 次数、Batch 数、顶点数 | `CanvasUpdateRegistry` / `Graphic.Rebuild` |
+| Profiler Timeline | `Canvas.SendWillRenderCanvases` 频率 | 每帧 Dirty 的 UI 元素 |
+| RenderDoc | GPU 侧顶点/片段数据 | `Canvas.BuildBatch` 之后 |
 
 ---
 
-## 第8章 UI 批处理与 DrawCall
+# 第四部分 工程实践（22~25）
 
-### 源码文件
+## 第22章 UI 架构设计
 
-无直接源码（BuildBatch 是 native 方法），但可通过 `Frame Debugger` 反推行为。
+工程模式（UIManager、UI 栈、UIBase 生命周期）**无 UGUI 源码对应**；对接的引擎/uGUI API：`Canvas`（多 Canvas 拆分）、`CanvasGroup`（alpha/raycast 控制）、`Graphic`（`SetVerticesDirty` 重建控制）、`RectTransform`。
 
-### 核心概念
+## 第23章 DOTween 原理与 UGUI 集成
 
-**合批条件**（可在 Frame Debugger 中验证）：
+DOTween 是第三方库（Demigiant/DOTween），**不在 uGUI 仓库**。与 UGUI 的对接点：tween 修改 `RectTransform`/`Graphic.color` → 属性 setter 调 `SetVerticesDirty` → 经 `CanvasUpdateRegistry` 重建。
 
-```
-必须完全一致才能合并：
-  ├── Material（同一个实例）
-  ├── Texture（同一张图）
-  ├── Shader + Keywords
-  └── Stencil 状态
-中断批次的因素：
-  ├── 材质变化       → Frame Debugger: Different Material
-  ├── 纹理变化       → Different Texture
-  ├── Mask 嵌套      → Different Stencil
-  └── RectMask2D    → Different Clipping Rect
-```
+## 第24章 综合案例与实战
 
-### 如何验证
+案例涉及的源码（均为前文文件）：`Graphic.cs`（重建）、`CanvasUpdateRegistry.cs`（调度）、`ScrollRect.cs` + `LayoutRebuilder.cs`（虚拟列表）、`IMeshModifier`/`VertexHelper`（特效）、`Canvas`（动静分离）。Profiler 实战对应函数见第 20/21 章映射表。
 
-```
-1. 创建一个 Canvas，放两个 Image（同一图集）
-2. 打开 Frame Debugger（Window → Analysis → Frame Debugger）
-3. 观察两个 Image 是否在同一个 DrawCall 中
-4. 改变其中一个 Image 的材质 → 观察 Batch 分裂
-```
+## 第25章 UI Toolkit 对比分析
+
+UI Toolkit 是独立系统（内置包 `com.unity.ui`，UIElements），**不是 uGUI**。对比阅读要点：`VisualElement`（vs `RectTransform`+`Graphic`）、`PanelSettings`/`UIDocument`（vs `Canvas`）、事件用 `EventDispatcher`（vs `EventSystem`）、布局用 Flexbox（vs `LayoutGroup`）。
 
 ---
 
-## 第9章 UI 与渲染管线
-
-### 本章是全链路总结，无新源码
-
----
-
-# 第三部分：三大子系统（第10-12章）
-
-## 第10章 Layout 布局系统
-
-### 源码文件
-
-| 文件 | 说明 |
-|------|------|
-| `LayoutGroup.cs` | 布局基类，实现 ILayoutGroup |
-| `HorizontalOrVerticalLayoutGroup.cs` | 水平/垂直布局通用逻辑 |
-| `HorizontalLayoutGroup.cs` | 水平布局 |
-| `VerticalLayoutGroup.cs` | 垂直布局 |
-| `GridLayoutGroup.cs` | 网格布局 |
-| `LayoutRebuilder.cs` | 布局重建 |
-| `ContentSizeFitter.cs` | 自适应尺寸 |
-| `LayoutElement.cs` | 布局元素配置 |
-| `LayoutUtility.cs` | 布局计算工具 |
-
-### 核心概念 vs 源码映射
-
-**布局两阶段计算**（`ILayoutController` 接口）：
-
-```csharp
-public interface ILayoutController {
-    void SetLayoutHorizontal();  // 阶段一：计算高度
-    void SetLayoutVertical();    // 阶段二：计算宽度（依赖高度计算结果）
-}
-```
-
-**LayoutRebuilder 的工作机制**：
-
-```csharp
-// LayoutRebuilder.cs（简化）
-public class LayoutRebuilder : ICanvasElement {
-    public static void MarkLayoutForRebuild(RectTransform rect) {
-        // 向上遍历找到最近的 LayoutGroup
-        // 注册到 CanvasUpdateRegistry
-    }
-
-    public void Rebuild(CanvasUpdate executing) {
-        // 执行布局计算
-        PerformLayoutCalculation();
-        PerformLayoutControl();
-    }
-
-    private void PerformLayoutControl() {
-        // 调用父级 LayoutGroup.SetLayoutHorizontal/Vertical
-    }
-}
-```
-
-### 源码阅读路径
-
-```
-1. LayoutGroup.cs → CalculateLayoutInputHorizontal/ Vertical
-2. HorizontalLayoutGroup.cs → SetLayoutHorizontal/ SetLayoutVertical
-3. LayoutRebuilder.cs → Rebuild() → MarkLayoutForRebuild()
-4. ContentSizeFitter.cs → SetLayoutHorizontal/Vertical
-```
-
-### 关键问题
-
-**ContentSizeFitter 的双向依赖**：ContentSizeFitter 依赖 LayoutGroup 的排布结果来计算自己的尺寸，但 LayoutGroup 又需要子元素的尺寸来做排布——这会导致同一帧内多次递归。
-
----
-
-## 第11章 EventSystem 事件系统
-
-### 源码文件
-
-| 文件 | 说明 |
-|------|------|
-| `EventSystem.cs` | 核心调度器，每帧 Update |
-| `BaseInputModule.cs` | 输入模块基类 |
-| `StandaloneInputModule.cs` | 鼠标/键盘输入处理 |
-| `TouchInputModule.cs` | 触摸输入处理 |
-| `InputSystemUIInputModule.cs` | 新输入系统适配 |
-| `ExecuteEvents.cs` | 事件分发核心，委托表 |
-| `BaseRaycaster.cs` | 射线检测基类 |
-| `GraphicRaycaster.cs` | UI 射线检测（矩形范围） |
-| `PhysicsRaycaster.cs` | 3D 物理射线检测 |
-| `Physics2DRaycaster.cs` | 2D 物理射线检测 |
-| `PointerEventData.cs` | 指针事件数据 |
-| `RaycasterManager.cs` | Raycaster 全局注册表 |
-
-### 核心概念 vs 源码映射
-
-**ExecuteEvents 的委托表机制**——这是 UGUI 事件系统的核心设计，**不依赖反射**：
-
-```csharp
-// ExecuteEvents.cs（核心设计）
-public static class ExecuteEvents {
-    // 事件类型 → 委托的静态映射表
-    public static EventFunction<IPointerClickHandler> pointerClickHandler =
-        (h, d) => h.OnPointerClick(d);
-
-    public static EventFunction<IPointerDownHandler> pointerDownHandler =
-        (h, d) => h.OnPointerDown(d);
-
-    public static EventFunction<IBeginDragHandler> beginDragHandler =
-        (h, d) => h.OnBeginDrag(d);
-
-    // 事件执行方法
-    public static bool Execute<T>(GameObject target, BaseEventData data,
-        EventFunction<T> functor) where T : IEventSystemHandler {
-        // 1. GetComponents<T>() 获取组件
-        // 2. 遍历调用 functor(component, data)
-        // 3. 有实现者时返回 true
-    }
-
-    // 事件冒泡
-    public static GameObject ExecuteHierarchy<T>(GameObject root,
-        BaseEventData data, EventFunction<T> functor) where T : IEventSystemHandler {
-        // 从 target 开始向上遍历 transform.parent
-        // 第一个实现接口的组件响应事件
-    }
-}
-```
-
-**事件链路**：
-
-```
-EventSystem.Update()
-  → m_CurrentInputModule.Process()
-    → StandaloneInputModule.ProcessMouseEvent()
-      → eventSystem.RaycastAll()       ← 获取所有 Raycaster 执行检测
-        → EventSystem.RaycastAll()
-          → RaycasterManager.GetRaycasters()
-            → 每个 Raycaster.Raycast()
-              → 结果合并排序
-      → ExecuteEvents.ExecuteHierarchy()  ← 分发事件
-```
-
-### 源码阅读路径
-
-```
-1. ExecuteEvents.cs → 完整看完，理解 delegate 表的设计
-2. EventSystem.cs → Update() → TickModules()
-3. StandaloneInputModule.cs → Process() → ProcessMouseEvent()
-4. GraphicRaycaster.cs → Raycast()
-   → 注意它和 Graphic.Raycast() 的区别
-5. RaycasterManager.cs → AddRaycaster / GetRaycasters
-```
-
-### 勘误对照
-
-```
-原文错误：timeScale=0 时 UI 输入仍有效
-→ EventSystem.Update() 是标准 MonoBehaviour Update，受 timeScale 控制
-→ timeScale=0 时 EventSystem 不执行，UI 输入完全失效
-
-原文错误：Physics2DRaycaster 直接继承 BaseRaycaster
-→ public class Physics2DRaycaster : PhysicsRaycaster
-→ 它继承自 PhysicsRaycaster，不是 BaseRaycaster
-```
-
----
-
-## 第12章 UI 资源与图集系统
-
-### 源码文件
-
-UGUI 本身的 SpriteAtlas 系统源码不在 UI/Core 目录中，而是在 `UnityEngine.UIModule` 中。但以下文件与图集使用直接相关：
-
-| 文件 | 说明 |
-|------|------|
-| `Graphic.cs` | `mainTexture` 属性—最终用于合批的纹理 |
-| `Image.cs` | 使用 Sprite 的入口 |
-| `RawImage.cs` | 使用 Texture 的入口 |
-
-### 关键理解
-
-**SpriteAtlas 的工作原理**（非开源，从行为反推）：
-
-```
-构建时：多个 Sprite → 合并到一张 Atlas Texture
-运行时：
-  Sprite.GetTexture() 返回的不再是原始 Texture
-  Sprint.GetUV() 返回 Atlas 中的 UV 区域
-  → Image 无感知地使用 Atlas Texture 渲染
-```
-
----
-
-# 第四部分：高级机制（第13、15-18章）
-
-## 第13章 Mask 与裁剪机制
-
-### 源码文件
-
-| 文件 | 说明 |
-|------|------|
-| `Mask.cs` | Stencil Mask 组件 |
-| `RectMask2D.cs` | 矩形裁剪组件 |
-| `MaskableGraphic.cs` | 支持裁剪的 Graphic 基类 |
-| `StencilMaterial.cs` | Stencil 材质管理 |
-| `MaskUtilities.cs` | Mask 工具方法 |
-| `ClipperRegistry.cs` | RectMask2D 的裁剪注册器 |
-
-### 核心概念 vs 源码映射
-
-**Mask 的工作机制**：
-
-```csharp
-// Mask.cs（简化）
-public class Mask : UIBehaviour, IMaterialModifier {
-    public virtual Material GetModifiedMaterial(Material baseMaterial) {
-        // 计算当前 Mask 的 Stencil 深度
-        int stencilDepth = MaskUtilities.GetStencilDepth(transform, maskCanvas);
-        // 返回带 Stencil 参数的新材质
-        return StencilMaterial.Add(baseMaterial, stencilID, ...);
-    }
-
-    protected void OnEnable() {
-        // 通知子树重新计算 Mask 状态
-        MaskUtilities.NotifyStencilStateChanged(this);
-    }
-}
-```
-
-**StencilMaterial 的缓存机制**：
-
-```csharp
-// StencilMaterial.cs
-public static class StencilMaterial {
-    private class StencilMaterialEntry {
-        public Material baseMat;    // 原始材质
-        public Material customMat;  // 带 Stencil 参数的新材质
-        public int stencilID;       // Stencil 参考值
-        public StencilOp operation; // 写入操作（Replace/Keep）
-        public CompareFunction compareFunction; // 比较函数
-    }
-
-    private static List<StencilMaterialEntry> m_List = new();
-
-    public static Material Add(Material baseMat, int stencilID, ...) {
-        // 查找缓存：相同参数返回同一个实例
-        // 不同参数创建新实例并缓存
-    }
-}
-```
-
-**RectMask2D 的工作机制**：
-
-```csharp
-// RectMask2D.cs（简化）
-public class RectMask2D : UIBehaviour, IClipper {
-    private List<IClippable> m_ClipTargets = new();
-
-    public virtual void PerformClipping() {
-        Rect clipRect = GetClipRect();  // 从 RectTransform 计算
-        foreach (var target in m_ClipTargets) {
-            if (clipRect.Overlaps(targetBounds))
-                target.SetClipRect(clipRect, true);  // → EnableRectClipping
-            else
-                target.Cull(clipRect, true);  // → cull = true
-        }
-    }
-}
-```
-
-### 源码阅读路径
-
-```
-1. Mask.cs → GetModifiedMaterial() / OnEnable / OnDisable
-2. StencilMaterial.cs → Add() 的缓存逻辑 ← 理解 Mask 断批的原因
-3. MaskableGraphic.cs → GetModifiedMaterial() (Mask 和 RectMask2D 都改这里)
-4. RectMask2D.cs → PerformClipping() / AddClippable / RemoveClippable
-5. ClipperRegistry.cs → Cull() 的执行时机
-```
-
-### 关键问题
-
-**为什么 Mask 会断批？**
-→ `StencilMaterial.Add()` 为不同 Stencil 参数创建不同 Material 实例
-→ 合批要求 Material 实例一致 → 不同实例 = 不同 Batch
-
-**相同深度的 Mask 子节点之间能合批吗？**
-→ 能，因为它们的 Stencil 参数完全相同 → 共享同一个 Material 实例
-
----
-
-## 第15章 文本渲染系统
-
-### 源码文件
-
-| 文件 | 说明 |
-|------|------|
-| `Text.cs` | 传统 UGUI Text 组件（已标记为 Legacy） |
-| `FontData.cs` | 字体参数序列化 |
-| — | TextGenerator（引擎内置，C# 侧调用但不开源） |
-
-### 核心概念 vs 源码映射
-
-**Text 的 OnPopulateMesh——每个字符生成一个 Quad**：
-
-```csharp
-// Text.cs（简化）
-protected override void OnPopulateMesh(VertexHelper vh) {
-    // TextGenerator 是引擎内置的排版引擎
-    TextGenerationSettings settings = GetGenerationSettings(rectTransform.rect.size);
-    cachedTextGenerator.Populate(text, settings);  // 生成顶点数据
-
-    IList<UIVertex> verts = cachedTextGenerator.verts;
-    // 每个字符生成 4 顶点 + 6 索引
-    for (int i = 0; i < verts.Count; i += 4) {
-        vh.AddVert(verts[i]);
-        vh.AddVert(verts[i+1]);
-        vh.AddVert(verts[i+2]);
-        vh.AddVert(verts[i+3]);
-        vh.AddTriangle(i, i+1, i+2);
-        vh.AddTriangle(i+2, i+1, i+3);
-    }
-}
-```
-
-**Font.textureRebuilt**——图集更新后的级联反应：
-
-```csharp
-// 监听 font.textureRebuilt 事件
-// 当字体图集发生变化时，所有使用该字体的 Text 全部重建
-Font.textureRebuilt += (font) => {
-    // 遍历所有使用该字体的 Text
-    // 调用 SetVerticesDirty()
-};
-```
-
----
-
-## 第16章 UI Mesh 扩展机制
-
-### 源码文件
-
-| 文件 | 说明 |
-|------|------|
-| `BaseMeshEffect.cs` | Mesh 效果基类 |
-| `IMeshModifier.cs` | Mesh 修改接口 |
-| `Shadow.cs` | 阴影效果 |
-| `Outline.cs` | 描边效果（继承 Shadow） |
-| `PositionAsUV1.cs` | 位置→UV1 效果 |
-
-### 核心概念 vs 源码映射
-
-**完整调用链**：
-
-```
-Graphic.Rebuild()
-  → UpdateGeometry()
-    → DoMeshGeneration()
-      → OnPopulateMesh(vh)     ← 生成原始顶点
-      → GetComponents<IMeshModifier>()  ← 获取所有 BaseMeshEffect
-        → 按顺序调用 ModifyMesh(vh)    ← 链式修改
-          → CanvasRenderer.SetMesh()   ← 提交最终 Mesh
-```
-
-**Shadow 的实现——顶点复制**：
-
-```csharp
-// Shadow.cs（简化）
-public class Shadow : BaseMeshEffect {
-    public override void ModifyMesh(VertexHelper vh) {
-        List<UIVertex> verts = GetVerticesFromHelper(vh);  // 读取
-        int count = verts.Count;
-
-        for (int i = 0; i < count; i++) {
-            UIVertex vt = verts[i];
-            vt.position += effectDistance;  // 偏移
-            vt.color = effectColor;         // 改色
-            verts.Add(vt);                  // 追加（复制）
-        }
-
-        vh.Clear();
-        vh.AddUIVertexTriangleStream(verts);
-    }
-}
-```
-
-性能影响：原始 4 顶点 → Shadow 后 8 顶点 → Outline 后 40 顶点（×5）。
-
-### 源码阅读路径
-
-```
-1. BaseMeshEffect.cs → 接口定义 + OnEnable 时 SetVerticesDirty
-2. Shadow.cs → ModifyMesh 完整实现
-3. Outline.cs → 4 次调用 base 的 ApplyShadow
-```
-
----
-
-## 第17章 UI Shader 机制
-
-### 源码文件
-
-Unity 内置的 UI Shader 不在 C# 仓库中，位于引擎内置资源中。可以通过以下方式查看：
-
-```
-Unity Built-in Shaders → UI → UI-Default.shader
-```
-
-位置：
-- Windows: `Unity安装目录/Data/Resources/BuiltinShaders/UI-Default.shader`
-- 或通过 GitHub 搜索 `UnityBuiltinShaders`
-
-### UI-Default.shader 逐行解读
-
-```glsl
-Shader "UI/Default" {
-    Properties {
-        [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
-        _Color ("Tint", Color) = (1,1,1,1)
-    }
-
-    SubShader {
-        Tags { "Queue"="Transparent" "RenderType"="Transparent" "CanUseSpriteAtlas"="True" }
-
-        Stencil {
-            Ref [_Stencil]           // ← Material 参数，不是硬编码
-            Comp [_StencilComp]
-            Pass [_StencilOp]
-        }
-
-        Cull Off
-        Lighting Off
-        ZWrite Off                  // UI 不写深度
-        Blend SrcAlpha OneMinusSrcAlpha  // 标准 Alpha 混合
-
-        Pass {
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-
-            struct appdata_t {
-                float4 vertex   : POSITION;   // ← 来自 UIVertex.position
-                float4 color    : COLOR;      // ← 来自 UIVertex.color
-                float2 texcoord : TEXCOORD0;  // ← 来自 UIVertex.uv0
-            };
-
-            v2f vert(appdata_t v) {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
-                o.texcoord = v.texcoord;
-                o.color = v.color * _Color;   // 顶点颜色 × Tint
-                return o;
-            }
-
-            fixed4 frag(v2f i) : SV_Target {
-                fixed4 color = tex2D(_MainTex, i.texcoord) * i.color;
-                return color;                 // ← 核心：就这么一行
-            }
-            ENDCG
-        }
-    }
-}
-```
-
-### Stencil 参数传递机制
-
-```csharp
-// Mask 通过 StencilMaterial.Add() 修改 Material 参数
-// Shader 通过 [_Stencil] 读取 Material 参数
-// 所以同一个 Shader 可以服务于不同 Stencil 状态的 UI
-```
-
----
-
-## 第18章 UI 特效实现
-
-### 相关源码
-
-Shader 实现见第 17 章，CPU 特效见第 16 章（BaseMeshEffect）。
-
-| 效果 | 实现方式 | 源码文件 |
-|------|---------|---------|
-| 渐变 | Shader（lerp） | 自定义 Shader |
-| 流光 | Shader（时间+UV） | 自定义 Shader |
-| 灰化 | Shader（dot 加权） | 自定义 Shader |
-| 描边 | Shader（8邻域采样）或 ModifyMesh | Outline.cs（CPU）/ 自定义 Shader（GPU）|
-| 发光 | Shader（多重采样+权重） | 自定义 Shader |
-| 溶解 | Shader（噪声+discard） | 自定义 Shader |
-| 毛玻璃 | Shader（GrabPass+高斯模糊） | 自定义 Shader |
-
----
-
-# 第五部分：性能与工具（第19、28章）
-
-## 第19章 UI 特效与性能
-
-### 源码文件
-
-| 文件 | 说明 |
-|------|------|
-| `CanvasUpdateRegistry.cs` | Rebuild 调度器 |
-| `Graphic.cs` | Dirty 标记 |
-| `LayoutRebuilder.cs` | Layout 重建 |
-| `StencilMaterial.cs` | 材质实例化计数器 |
-| `MaskUtilities.cs` | Stencil 深度计算 |
-
-### Profiler 中常见的函数对应源码
-
-| Profiler 函数 | 对应源码 | 含义 |
-|------|------|------|
-| `Canvas.BuildBatch` | 引擎 native 方法 | Canvas 正在合批，顶点多了或变化频繁 |
-| `LayoutRebuilder.Rebuild` | `LayoutRebuilder.cs` | Layout 正在递归计算 |
-| `Graphic.Rebuild` | `Graphic.cs` | Graphic 正在重建顶点 |
-| `Canvas.SendWillRenderCanvases` | 引擎 native 事件 | 所有 UI 更新的入口（Canvas.cs 不在 uGUI 仓库中） |
-
-### 如何通过源码定位问题
-
-```csharp
-// 方法：在 SetVerticesDirty 中加日志（需要 clone 源码）
-public virtual void SetVerticesDirty() {
-    Debug.Log($"{name} SetVerticesDirty", this);  // ← 加这行
-    m_VertsDirty = true;
-    CanvasUpdateRegistry.RegisterCanvasElementForGraphicRebuild(this);
-}
-```
-
----
-
-## 第28章 调试与分析工具
-
-### Frame Debugger 的使用
-
-```
-Window → Analysis → Frame Debugger → Enable
-左侧：DrawCall 列表
-右侧 Details：
-  - Shader: UI/Default
-  - Texture: AtlasName
-  - Stencil Ref: 0
-对比相邻两个 DrawCall 的 Details → 不同字段就是断批原因
-```
-
-### Profiler 的使用
-
-```
-Window → Analysis → Profiler → UI Module
-关键指标：
-  - Vertices: UI 总顶点数
-  - Batches: DrawCall 数
-  - SetVerticesDirty 调用次数
-  - Layout Rebuild 次数
-```
-
----
-
-# 第六部分：工程实践（第25、26、29章）
-
-## 第25章 UI 架构设计
-
-### 无直接 UGUI 源码对应
-
-本章是工程架构设计，非 UGUI 机制。核心是 MVP 模式 + UIManager + 生命周期标准化。可参考源码设计思路：
-
-```csharp
-// UIManager 的核心——对照本章理解
-public interface IUIComponent {
-    void OnCreate();     // 实例化后（一次）
-    void OnBind(object data); // 绑定数据
-    void OnClear();      // 回收前
-}
-
-public abstract class UIBase : MonoBehaviour {
-    public virtual void OnCreate() { }
-    public virtual void OnInit() { }
-    public virtual void OnOpen(object param = null) { }
-    public virtual void OnClose() { }
-    public virtual void OnDestroyUI() { }
-}
-```
-
-## 第26章 DOTween 原理与 UGUI 集成
-
-### 无 UGUI 源码，DOTween 是第三方库
-
-但与 UGUI 源码的接口关系：
-- `CanvasGroup.DOFade()` → 修改 `CanvasGroup.alpha` → 不触发 Rebuild ✅
-- `Graphic.DOFade()` → 修改 `Graphic.color.a` → 触发 `SetVerticesDirty()` ⚠️
-- `RectTransform.DOSizeDelta()` → 触发 Layout Rebuild 🔴
-
-## 第29章 综合案例分析
-
-### 涉及源码
-
-| 案例 | 对应源码文件 |
-|------|-------------|
-| 背包数据驱动 | `Graphic.cs`（SetVerticesDirty 触发刷新） |
-| 虚拟列表 | `LayoutRebuilder.cs`（不用 LayoutGroup 避免 Layout Rebuild） |
-| 弹窗系统 | 无直接 UGUI 源码，架构设计 |
-
----
-
-# 附录：UGUI 源码阅读速查表
-
-| 你想了解什么 | 读哪个文件 | 看什么方法 |
-|------------|----------|----------|
-| UI 怎么生成的 Mesh | `Graphic.cs` | `OnPopulateMesh` → 在 Image/Text 中看实现 |
-| UI 何时重建 | `CanvasUpdateRegistry.cs` | `PerformUpdate` |
-| 布局怎么工作 | `LayoutRebuilder.cs` | `MarkLayoutForRebuild`, `Rebuild` |
-| LayoutGroup 怎么排子元素 | `HorizontalOrVerticalLayoutGroup.cs` | `SetLayoutHorizontal/Vertical` |
-| 事件怎么分发 | `ExecuteEvents.cs` | `Execute`, `ExecuteHierarchy` |
-| Mask 怎么裁剪 | `Mask.cs` | `GetModifiedMaterial` |
-| | `StencilMaterial.cs` | `Add`（理解缓存→断批） |
-| RectMask2D 怎么裁剪 | `RectMask2D.cs` | `PerformClipping`, `AddClippable` |
-| Shadow/Outline 怎么实现 | `Shadow.cs`, `Outline.cs` | `ModifyMesh` |
-| 什么打断 Batch | Frame Debugger | 对比相邻 DrawCall 的 Details |
-| Canvas 怎么合批 | 引擎 native 方法 | `Canvas.BuildBatch`（不可见） |
+# 附录：源码阅读速查表
+
+| 想解决的问题 | 打开文件 | 关键方法 |
+|-------------|---------|---------|
+| UI 什么时候重建 | `CanvasUpdateRegistry.cs` | `PerformUpdate()` |
+| 顶点怎么生成 | `Graphic.cs` / `Image.cs` / `Text.cs` | `OnPopulateMesh(VertexHelper)` |
+| 顶点存在哪 | `Utility/VertexHelper.cs` | `AddVert/AddTriangle/FillMesh/Clear` |
+| 材质怎么进渲染 | `Graphic.cs` | `materialForRendering` / `GetModifiedMaterial` |
+| 怎么给顶点加特效 | `VertexModifiers/BaseMeshEffect.cs` | `ModifyMesh(VertexHelper)` |
+| 阴影/描边实现 | `VertexModifiers/Shadow.cs`、`Outline.cs` | `GetUIVertexStream` + `AddUIVertexTriangleStream` |
+| 布局怎么算 | `Layout/LayoutRebuilder.cs` | `MarkLayoutForRebuild` / `Rebuild` |
+| 事件怎么分发 | `EventSystem/ExecuteEvents.cs` | `Execute()` / `GetEventHandler()` |
+| 命中检测 | `UI/Core/GraphicRaycaster.cs` | `Raycast()` |
+| Stencil 裁剪 | `Mask.cs` / `StencilMaterial.cs` | `GetModifiedMaterial` / `Add` |
+| 矩形裁剪 | `RectMask2D.cs` | `EnableRectClipping` |
+| 文本顶点 | `Text.cs` | `PopulateWithErrors` / `AddUIVertexQuad` |
+| 字体重建通知 | `FontUpdateTracker.cs` | `TrackText` / `UntrackText` |
+| 分辨率适配 | `Layout/CanvasScaler.cs` | `HandleScaleWithScreenSize()` |
+| 滚动容器 | `ScrollRect.cs` | `LateUpdate()` / `UpdateBounds` |
