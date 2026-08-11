@@ -1,12 +1,12 @@
-# 第4章 RectTransform 核心机制
+# 第3章 RectTransform 核心机制
 
 > 本章对应原书结构中的第3章。RectTransform 是 UGUI 空间系统的基石，定义了 UI 元素如何在父级 Canvas 中进行定位、对齐和尺寸计算。与普通 Transform 不同，RectTransform 引入了锚点（Anchor）和轴心（Pivot）两大机制，使得 UI 可以以声明式的方式描述"相对父级什么位置、以什么为基准"。
 
 ---
 
-## 4.1 RectTransform vs Transform
+## 3.1 RectTransform vs Transform
 
-### 4.1.1 Transform 的定位方式
+### 3.1.1 Transform 的定位方式
 
 传统的 Transform 组件使用 **绝对坐标** 描述物体的空间状态：
 
@@ -18,7 +18,7 @@ Transform.localScale → 缩放
 
 子物体的 `localPosition` 是相对于父物体的偏移，没有"对齐方式"的概念。如果要实现"子元素在父元素的右边"这样的布局，需要手动计算坐标，且父级尺寸变化时所有子元素都需要重新计算。
 
-### 4.1.2 RectTransform 新增的能力
+### 3.1.2 RectTransform 新增的能力
 
 RectTransform 继承自 Transform（`RectTransform : Transform`），在 position/rotation/scale 的基础上，增加了 UI 布局所需的专属参数：
 
@@ -35,7 +35,7 @@ RectTransform 继承自 Transform（`RectTransform : Transform`），在 positio
 
 > **重要**：RectTransform 是 Unity 引擎内置组件，C# 源码位于 `UnityEngine.CoreModule`，**不在 UGUI 开源仓库中**。但它的所有公开 API 和行为都可以通过官方文档和运行时反射验证。
 
-### 4.1.3 核心区别总结
+### 3.1.3 核心区别总结
 
 ```
 Transform:  position (绝对) + rotation + scale
@@ -46,9 +46,9 @@ RectTransform: anchorMin/Max (相对父级对齐) + pivot (自身基准) + ancho
 
 ---
 
-## 4.2 锚点系统（Anchor）
+## 3.2 锚点系统（Anchor）
 
-### 4.2.1 锚点的本质
+### 3.2.1 锚点的本质
 
 锚点（Anchor）定义了 **子元素相对于父级矩形** 的对齐参考系。`anchorMin` 和 `anchorMax` 共同定义了一个"锚点矩形"（Anchor Rect）：
 
@@ -62,7 +62,7 @@ anchorMax = (xMax, yMax)   // 父级矩形右上角的归一化位置
 - `(1, 1)` = 父级右上角
 - `(0.5, 0.5)` = 父级中心
 
-### 4.2.2 锚点预设（Presets）
+### 3.2.2 锚点预设（Presets）
 
 Unity 编辑器提供了一系列锚点预设，覆盖了最常见的对齐模式：
 
@@ -84,7 +84,7 @@ Unity 编辑器提供了一系列锚点预设，覆盖了最常见的对齐模�
 - sizeDelta 表示子元素四边距父级四边的偏移
 - 父级尺寸变化时，子元素**自动跟随缩放**
 
-### 4.2.3 锚点与父级尺寸变化的关系
+### 3.2.3 锚点与父级尺寸变化的关系
 
 这是理解 RectTransform 的关键——**锚点决定了父级尺寸变化时子元素的行为**：
 
@@ -107,9 +107,9 @@ float anchorTop    = parentHeight * anchorMax.y;
 
 ---
 
-## 4.3 轴心（Pivot）
+## 3.3 轴心（Pivot）
 
-### 4.3.1 轴心的定义
+### 3.3.1 轴心的定义
 
 Pivot 同样是一个归一化坐标 `(0~1, 0~1)`，定义在 **自身矩形空间** 内：
 
@@ -120,7 +120,7 @@ Pivot 同样是一个归一化坐标 `(0~1, 0~1)`，定义在 **自身矩形空�
 | (0.5, 0.5) | 中心（默认值） |
 | (0.5, 1) | 顶部居中 |
 
-### 4.3.2 轴心的作用
+### 3.3.2 轴心的作用
 
 轴心影响三个方面的行为：
 
@@ -144,9 +144,9 @@ pivot=(1, 0)     → 从右下角缩放
 
 ---
 
-## 4.4 矩形计算详解
+## 3.4 矩形计算见解
 
-### 4.4.1 坐标空间
+### 3.4.1 坐标空间
 
 RectTransform 涉及三个坐标空间：
 
@@ -157,7 +157,7 @@ RectTransform 涉及三个坐标空间：
             └─ 轴心（Pivot）—— 子元素自身矩形内的基准点
 ```
 
-### 4.4.2 offsetMin 和 offsetMax
+### 3.4.2 offsetMin 和 offsetMax
 
 `offsetMin` 和 `offsetMax` 是最直观的边界偏移量：
 
@@ -171,7 +171,7 @@ offsetMax = rect.max - anchorMax（子元素右上角 - 锚点右上角）
 
 当锚点四点合一时（anchorMin == anchorMax），offsetMin 和 offsetMax 的含义退化为"子元素四边到锚点的距离"。
 
-### 4.4.3 anchoredPosition
+### 3.4.3 anchoredPosition
 
 `anchoredPosition` 是 **轴心到锚点的偏移向量**。当锚点聚为一点时：
 
@@ -193,7 +193,7 @@ Vector2 anchorCenter = new Vector2(
 );
 ```
 
-### 4.4.4 sizeDelta
+### 3.4.4 sizeDelta
 
 `sizeDelta` 是 **当前矩形尺寸与锚点矩形尺寸的差值**：
 
@@ -208,7 +208,7 @@ sizeDelta = rect.size - anchorRect.size
   - `sizeDelta = (0, 0)` → 子元素与锚点矩形等大
   - `sizeDelta.x > 0` → 子元素比锚点矩形宽
   
-### 4.4.5 rect（只读属性）
+### 3.4.5 rect（只读属性）
 
 `rect` 属性返回的是 **本地空间** 中的矩形，以 pivot 为原点：
 
@@ -226,9 +226,9 @@ Rect rect = new Rect(
 
 ---
 
-## 4.5 与 Canvas、Layout 系统的协作
+## 3.5 与 Canvas、Layout 系统的协作
 
-### 4.5.1 RectTransform 在 UI 渲染链中的位置
+### 3.5.1 RectTransform 在 UI 渲染链中的位置
 
 从 UI 元素到最终渲染的完整链路中，RectTransform 处于顶层：
 
@@ -243,7 +243,7 @@ Canvas           → 渲染入口，定义渲染模式
 
 每个 UI 元素都同时挂载 RectTransform 和 Graphic（或 Graphic 的子类）。Graphic 在 `OnPopulateMesh()` 中读取 RectTransform 的 `rect` 属性，将矩形区域转换为 Mesh 顶点。
 
-### 4.5.2 Canvas 与 RectTransform
+### 3.5.2 Canvas 与 RectTransform
 
 Canvas 组件本身带有一个 RectTransform（根 RectTransform），它定义了 UI 的"世界空间基准矩形"：
 
@@ -253,9 +253,9 @@ Canvas 组件本身带有一个 RectTransform（根 RectTransform），它定义
 
 所有子 UI 元素的 RectTransform 都相对于 Canvas 的根 RectTransform 进行定位。
 
-### 4.5.3 Layout 系统与 RectTransform 的关系
+### 3.5.3 Layout 系统与 RectTransform 的关系
 
-Layout 系统（详见第10章）是 RectTransform 的主要驱动者之一。布局计算的本质就是 **向 RectTransform 参数写入计算结果**：
+Layout 系统（详见第11章）是 RectTransform 的主要驱动者之一。布局计算的本质就是 **向 RectTransform 参数写入计算结果**：
 
 ```csharp
 // Layout 系统最终做的工作（简化）
@@ -280,7 +280,7 @@ HorizontalLayoutGroup.SetLayoutHorizontal()
 
 **关键理解**：Layout 系统不参与渲染，它只负责操纵 RectTransform 的参数。渲染侧（Graphic）读取的是 RectTransform 最终计算出的 `rect` 值。
 
-### 4.5.4 ContentSizeFitter
+### 3.5.4 ContentSizeFitter
 
 ContentSizeFitter 是另一个 RectTransform 的驱动者，它反向工作——根据子内容（如 Text 的文本宽度）计算出父级 RectTransform 的尺寸，然后修改其 `sizeDelta`：
 
@@ -292,11 +292,11 @@ ContentSizeFitter.SetLayoutHorizontal()
 
 ---
 
-## 4.6 RectTransformUtility 工具类
+## 3.6 RectTransformUtility 工具类
 
 `RectTransformUtility` 是 UGUI 源码中的静态工具类文件（位于 `UnityEngine.UI/UI/Core/`），提供了 RectTransform 空间变换的核心辅助方法。
 
-### 4.6.1 文件位置与作用
+### 3.6.1 文件位置与作用
 
 | 项目 | 说明 |
 |------|------|
@@ -305,7 +305,7 @@ ContentSizeFitter.SetLayoutHorizontal()
 | 关键特性 | 全部为 `public static` 方法，包含对 RectTransform 的多种空间坐标转换 |
 | 核心私有方法 | `PixelAdjustPoint()` / `PixelAdjustRect()` 等被内部组件调用 |
 
-### 4.6.2 核心 API
+### 3.6.2 核心 API
 
 **屏幕坐标与 UI 坐标的转换**（最常用的功能）：
 
@@ -362,7 +362,7 @@ public static Rect PixelAdjustRect(
 );
 ```
 
-### 4.6.3 典型使用场景
+### 3.6.3 典型使用场景
 
 **场景1：点击检测**
 
@@ -400,7 +400,7 @@ dragItem.anchoredPosition = localPoint;
 
 ---
 
-## 4.7 关键 API 速查表
+## 3.7 关键 API 速查表
 
 | API | 类型 | 说明 |
 |-----|------|------|
@@ -421,7 +421,7 @@ dragItem.anchoredPosition = localPoint;
 
 ---
 
-## 4.8 常见误区
+## 3.8 常见误区
 
 **误区1：anchoredPosition 就是 UI 的位置**
 

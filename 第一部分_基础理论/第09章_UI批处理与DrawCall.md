@@ -144,7 +144,7 @@ ImageB.sprite = spriteB;  // textureB（另一个 2048x2048）
 // ❌ 无法合批 —— texture 不同
 ```
 
-将多个小纹理打包到一张图集中，是 UI 合批最基础的优化手段。详见第12章。
+将多个小纹理打包到一张图集中，是 UI 合批最基础的优化手段。详见第14章。
 
 ### 9.3.4 Shader 与 Keywords 匹配
 
@@ -184,7 +184,7 @@ UGUI 的 CanvasRenderer 可以决定向 Shader 传递哪些顶点数据通道（
 - RawImage 直接使用了不同的 Texture
 - Sprite 来自不同图集
 
-**解决方案**：将常用小图打入同一张图集。详见第12章。
+**解决方案**：将常用小图打入同一张图集。详见第14章。
 
 ### 9.4.3 Mask / Stencil 状态变化
 
@@ -198,7 +198,7 @@ Mask 内侧嵌套 Mask 的 UI（Stencil Ref=2, Comp=Equal）← Batch C
 Mask 外侧的 UI（Stencil Ref=0, Comp=Always）    ← 回到 Batch A（如果材质相同）
 ```
 
-**每个 Mask 至少打断一次 Batch**——嵌套 Mask 则打断更多。Mask 是 UI 系统中 DrawCall 数量的主要推手之一。详见第13章。
+**每个 Mask 至少打断一次 Batch**——嵌套 Mask 则打断更多。Mask 是 UI 系统中 DrawCall 数量的主要推手之一。详见第15章。
 
 ### 9.4.4 RectMask2D 裁剪状态变化
 
@@ -271,7 +271,7 @@ UGUI 内部处理大 Mesh 的效率较高（合并后的 Mesh 即使包含数千
 
 ## 9.6 批处理与图集的关联
 
-> 详细内容请参考第12章"UI 资源与图集系统"，此处仅做简要关联。
+> 详细内容请参考第14章"UI 资源与图集系统"，此处仅做简要关联。
 
 ### 9.6.1 图集对合批的意义
 
@@ -297,11 +297,11 @@ UGUI 内部处理大 Mesh 的效率较高（合并后的 Mesh 即使包含数千
 
 ## 9.7 批处理与性能
 
-> 详细内容请参考第19章"UI 特效与性能"，此处仅做简要关联。
+> 详细内容请参考第20章"UI 性能分析"，此处仅做简要关联。
 
 ### 9.7.1 Batch 中断是 UI 性能问题的第一根源
 
-UI 性能问题可以归纳为五个维度（详见第19章），其中"Batch 中断"排在第一位。一次 Batch 中断就意味着一个新的 DrawCall。
+UI 性能问题可以归纳为五个维度（详见第20章），其中"Batch 中断"排在第一位。一次 Batch 中断就意味着一个新的 DrawCall。
 
 ### 9.7.2 Frame Debugger 诊断
 
@@ -369,9 +369,9 @@ DrawCall 降低到极致（追求 0~1 个 DrawCall）不一定是最优解。不
 | 关联章节 | 关联内容 |
 |---------|---------|
 | 第1章 整体架构 | Graphic → CanvasRenderer → Canvas 的渲染链路，是批处理的数据基础 |
-| 第12章 图集系统 | 图集解决了 Texture 匹配问题，是合批的最基础优化手段 |
-| 第13章 Mask 与裁剪 | Mask 通过 Stencil 打断 Batch，是 DrawCall 数量升高的主要推手之一 |
-| 第19章 性能优化 | Batch 中断是 UI 性能问题的第一维度，Frame Debugger 是核心诊断工具 |
+| 第14章 图集系统 | 图集解决了 Texture 匹配问题，是合批的最基础优化手段 |
+| 第15章 Mask 与裁剪 | Mask 通过 Stencil 打断 Batch，是 DrawCall 数量升高的主要推手之一 |
+| 第20章 性能分析 | Batch 中断是 UI 性能问题的第一维度，Frame Debugger 是核心诊断工具 |
 
 ### 一句话概括
 

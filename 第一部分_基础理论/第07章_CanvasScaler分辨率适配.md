@@ -1,4 +1,4 @@
-# 第2章 CanvasScaler 分辨率适配
+# 第7章 CanvasScaler 分辨率适配
 
 > 本章对应原书结构中的第2章（基础理论部分）。CanvasScaler 决定了 UI 在不同屏幕尺寸和分辨率下的缩放行为，是理解 UGUI 多分辨率适配的核心。
 
@@ -18,7 +18,7 @@ ConstantPhysicalSize → 根据屏幕 DPI 保持物理尺寸
 
 ---
 
-## 2.1 执行入口
+## 7.1 执行入口
 
 CanvasScaler 在 `OnEnable()` 时将 `Handle()` 注册到 `Canvas.preWillRenderCanvases` 事件，**保证在所有 UI 重建之前完成缩放计算**。
 
@@ -39,7 +39,7 @@ protected virtual void Handle() {
 
 ---
 
-## 2.2 ConstantPixelSize（恒定像素）
+## 7.2 ConstantPixelSize（恒定像素）
 
 scaleFactor 由用户手动指定，固定不变。Canvas 尺寸始终等于屏幕尺寸，UI 元素保持固定的像素尺寸，不随分辨率变化。
 
@@ -53,7 +53,7 @@ protected virtual void HandleConstantPixelSize() {
 
 ---
 
-## 2.3 ScaleWithScreenSize（随屏幕大小缩放）
+## 7.3 ScaleWithScreenSize（随屏幕大小缩放）
 
 **最常用的模式**。根据当前屏幕分辨率与参考分辨率的比值计算 scaleFactor。涉及三个核心参数：
 
@@ -122,7 +122,7 @@ protected void SetScaleFactor(float factor) {
 
 ---
 
-## 2.4 ConstantPhysicalSize（恒定物理尺寸）
+## 7.4 ConstantPhysicalSize（恒定物理尺寸）
 
 根据屏幕 DPI 计算 scaleFactor，使 UI 在不同 PPI 设备上保持一致的物理大小。
 
@@ -149,7 +149,7 @@ protected virtual void HandleConstantPhysicalSize() {
 
 ---
 
-## 2.5 scaleFactor 对 UI 的影响
+## 7.5 scaleFactor 对 UI 的影响
 
 CanvasScaler 修改 `m_Canvas.scaleFactor` 后，其影响范围包括：
 

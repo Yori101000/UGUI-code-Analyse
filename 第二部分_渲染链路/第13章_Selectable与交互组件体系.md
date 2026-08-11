@@ -1,4 +1,4 @@
-# 第X章 Selectable 与交互组件体系
+# 第13章 Selectable 与交互组件体系
 
 > UGUI 中的所有交互组件——Button、Toggle、Slider、Scrollbar、Dropdown、InputField——都继承自同一个基类 `Selectable`。理解 Selectable 的状态机机制、过渡方式和导航系统，是掌握交互组件体系的钥匙。
 
@@ -23,9 +23,9 @@ UIBehaviour
 
 ---
 
-## X.1 状态机
+## 13.1 状态机
 
-### X.1.1 SelectionState 枚举
+### 13.1.1 SelectionState 枚举
 
 Selectable 定义了四种状态：
 
@@ -36,7 +36,7 @@ Selectable 定义了四种状态：
 | **Pressed** | 鼠标按下 |
 | **Disabled** | `interactable = false`，或父级 CanvasGroup 被禁用 |
 
-### X.1.2 状态评估逻辑
+### 13.1.2 状态评估逻辑
 
 Selectable 内部通过三个布尔变量追踪交互状态：
 
@@ -58,7 +58,7 @@ else                                 → Normal
 
 注意：**Selected（选中）和 Highlighted（悬停）在视觉上使用相同的状态值**，两者没有视觉区别。
 
-### X.1.3 DoStateTransition——视觉过渡的执行
+### 13.1.3 DoStateTransition——视觉过渡的执行
 
 当状态发生变化时，`DoStateTransition(SelectionState state, bool instant)` 被调用：
 
@@ -85,7 +85,7 @@ SubClass 可以重写此方法，在保持基类状态管理的基础上叠加�
 
 ---
 
-## X.2 三种过渡方式
+## 13.2 三种过渡方式
 
 ### ColorTint（颜色渐变）
 
@@ -136,7 +136,7 @@ private void TriggerAnimation(string triggerName) {
 
 ---
 
-## X.3 导航系统（Navigation）
+## 13.3 导航系统（Navigation）
 
 Selectable 实现了 `IMoveHandler`，通过方向键/手柄摇杆在 UI 元素之间移动焦点。
 
@@ -182,7 +182,7 @@ public virtual Selectable FindSelectable(Vector3 dir) {
 
 ---
 
-## X.4 静态列表与生命周期
+## 13.4 静态列表与生命周期
 
 ### 全局 Selectable 列表
 
@@ -218,7 +218,7 @@ public bool IsInteractable() {
 
 ---
 
-## X.5 子类扩展
+## 13.5 子类扩展
 
 ### Button
 

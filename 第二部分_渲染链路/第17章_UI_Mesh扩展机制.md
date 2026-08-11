@@ -1,4 +1,4 @@
-# 第16章 UI Mesh 扩展机制
+# 第17章 UI Mesh 扩展机制
 
 > 本文是对原文第 16 章的结构化重写，合并了原文 16.1、16.2、16.4 中重复的链式流程描述（"OnPopulateMesh→ModifyMesh→SetMesh"同一链路讲了三次）。补充了原文缺失的 GC 分配问题和 `UIVertex` 结构体大小说明。对照 UGUI 源码修正了 5 处错误/遗漏。
 
@@ -19,9 +19,9 @@ Graphic 重建
 
 ---
 
-## 16.1 ModifyMesh：顶点后处理入口
+## 17.1 ModifyMesh：顶点后处理入口
 
-### 16.1.1 完整链路的执行顺序
+### 17.1.1 完整链路的执行顺序
 
 对于任意一个 Graphic（Image、Text 等），重建时的完整流程：
 
@@ -37,7 +37,7 @@ Graphic.Rebuild()
 
 **关键点**：所有特效共用同一个 `VertexHelper` 实例。前一个特效的输出就是后一个特效的输入。特效的执行顺序 = Inspector 中组件的排列顺序。
 
-### 16.1.2 IMeshModifier 接口与 BaseMeshEffect 基类
+### 17.1.2 IMeshModifier 接口与 BaseMeshEffect 基类
 
 ModifyMesh 的底层来自 `IMeshModifier` 接口：
 
@@ -73,7 +73,7 @@ protected override void OnEnable()
 
 忘记调用 `SetVerticesDirty()` 是自定义 Mesh Effect 最常见的 bug——改了参数但画面不变，因为 ModifyMesh 根本没重新执行。
 
-### 16.1.3 ModifyMesh 的标准写法
+### 17.1.3 ModifyMesh 的标准写法
 
 ```csharp
 public override void ModifyMesh(VertexHelper vh)
@@ -115,7 +115,7 @@ public override void ModifyMesh(VertexHelper vh)
 }
 ```
 
-### 16.1.4 CPU 顶点修改 vs Shader 特效
+### 17.1.4 CPU 顶点修改 vs Shader 特效
 
 | 维度 | CPU 顶点修改（ModifyMesh） | Shader |
 |------|:---:|:---:|
@@ -130,9 +130,9 @@ public override void ModifyMesh(VertexHelper vh)
 
 ---
 
-## 16.2 顶点复制：Shadow 与 Outline 的实现
+## 17.2 顶点复制：Shadow 与 Outline 的实现
 
-### 16.2.1 Shadow（阴影）
+### 17.2.1 Shadow（阴影）
 
 Shadow 不修改原始顶点——它**复制**一份，偏移位置，改颜色，追加回去。
 
@@ -175,7 +175,7 @@ public override void ModifyMesh(VertexHelper vh)
 
 **注意**：`UIVertex` 是结构体，`verts[i]` 取值时发生值复制。如果只改 `v` 不写回 `verts[i] = v`，修改不生效。追加时同理——追加的也是结构体副本。
 
-### 16.2.2 Outline（描边）
+### 17.2.2 Outline（描边）
 
 Outline 继承自 Shadow，向**多个方向**重复复制顶点：
 
@@ -221,7 +221,7 @@ public override void ModifyMesh(VertexHelper vh)
 
 这就是为什么移动端项目通常禁止 Text 使用 Outline——文本本身就几千顶点，Outline 的 ×5 乘法效应直接爆炸。而且所有顶点都在 CPU 侧处理完才上传 GPU，重建时的 CPU 开销、GC 压力、上传带宽都会放大。
 
-### 16.2.3 顶点复制的典型陷阱
+### 17.2.3 顶点复制的典型陷阱
 
 **① 忘记缓存原始数量 → 无限递归**
 
@@ -253,9 +253,9 @@ for (int i = 0; i < count; i++)
 
 ---
 
-## 16.3 多效果叠加
+## 17.3 多效果叠加
 
-### 16.3.1 顺序决定结果
+### 17.3.1 顺序决定结果
 
 多个 BaseMeshEffect 按 Inspector 顺序依次执行，共用同一份 VertexHelper。顺序不同，结果不同：
 
@@ -273,7 +273,7 @@ for (int i = 0; i < count; i++)
 
 **链式污染**：后执行的特效看到的不是原始 Mesh，而是前面所有特效修改过的结果。如果渐变组件写在 Outline 后面，它会连描边顶点一起渐变——这经常导致意外效果。
 
-### 16.3.2 多特效的 GC 成本
+### 17.3.2 多特效的 GC 成本
 
 每次 Graphic 重建，UGUI 都会调用 `GetComponents<IMeshModifier>()`——这是一个数组分配。加上每个 ModifyMesh 内部的 new List，一个带有 3 个特效的 Text 在重建时可能产生：
 
@@ -286,7 +286,7 @@ GetComponents<IMeshModifier>()   → 1 次数组分配
 
 如果这个 Text 每帧更新（实时刷新的数值、倒计时），GC Alloc 会迅速累积。这就是动态文本 + 多层特效往往成为性能热点的原因——不仅仅是顶点多，GC 分配也频繁。
 
-### 16.3.3 优化建议
+### 17.3.3 优化建议
 
 1. **缓存 `List<UIVertex>`**：声明为类字段，每次 `Clear()` 复用，避免 new 分配
 2. **减少特效层数**：特别是 Outline + Shadow 同时使用时，评估是否真正需要
@@ -327,6 +327,6 @@ UI Mesh 扩展机制本质上是一条**可编程几何流水线**。它让 UGUI
 |---|---------|------|---------|---------|
 | 1 | 🟡 中等 | 全文 | 未提及 `GetUIVertexStream()` 每次调用 new List 的 GC 分配问题 | 每次 ModifyMesh 调用都分配 List，UIVertex 约 52 字节，多层特效 + 高频重建时 GC 压力显著。应缓存 List 为成员变量 |
 | 2 | 🟡 中等 | 全文 | 未提及 `GetComponents<IMeshModifier>()` 每次 Graphic 重建时的数组分配 | `GetComponents` 在每次重建时分配数组，这也是一个频繁触发的 GC 点 |
-| 3 | 🟢 轻微 | 16.3.2 | "UIVertex 是结构体，因此发生了值复制" | 正确，但未说明 UIVertex 约 52 字节。几千个顶点的结构体复制本身就有可观的 CPU 缓存压力，不仅仅是 GC 问题 |
-| 4 | 🟢 轻微 | 16.3.3 / 16.3.5 / 16.4.3 | 顶点爆炸数字（4→8→40、Text 1000→Shadow 2000→Outline 5000）在三节中重复出现 | 同一组数字反复出现，仅上下文不同 |
-| 5 | 🟢 轻微 | 16.1.4 / 16.4.6 | "CPU Mesh 修改与 Shader 的区别"与"优先使用 Shader 特效" | 两个节都在对比 CPU vs Shader，论点相同 |
+| 3 | 🟢 轻微 | 17.3.2 | "UIVertex 是结构体，因此发生了值复制" | 正确，但未说明 UIVertex 约 52 字节。几千个顶点的结构体复制本身就有可观的 CPU 缓存压力，不仅仅是 GC 问题 |
+| 4 | 🟢 轻微 | 17.3.3 / 17.3.5 / 17.4.3 | 顶点爆炸数字（4→8→40、Text 1000→Shadow 2000→Outline 5000）在三节中重复出现 | 同一组数字反复出现，仅上下文不同 |
+| 5 | 🟢 轻微 | 17.1.4 / 17.4.6 | "CPU Mesh 修改与 Shader 的区别"与"优先使用 Shader 特效" | 两个节都在对比 CPU vs Shader，论点相同 |

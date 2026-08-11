@@ -1,4 +1,4 @@
-# 第11章 EventSystem 事件系统
+# 第12章 EventSystem 事件系统
 
 > 本文是对原文的结构化重写，按实际执行流程组织内容，消除原文小节间的重复。对照 UGUI 源码修正了 5 处错误。
 
@@ -30,9 +30,9 @@
 
 ---
 
-## 11.1 EventSystem 总体架构
+## 12.1 EventSystem 总体架构
 
-### 11.1.1 组件结构
+### 12.1.1 组件结构
 
 场景中创建 UI 时 Unity 自动生成 EventSystem 对象：
 
@@ -44,7 +44,7 @@ EventSystem GameObject
 
 EventSystem 本身不读取鼠标键盘，它只做三件事：**管理 InputModule → 触发 Raycast → 分发事件**。
 
-### 11.1.2 每帧执行流程
+### 12.1.2 每帧执行流程
 
 ```csharp
 // EventSystem.cs
@@ -73,7 +73,7 @@ protected virtual void Update()
 
 `m_CurrentInputModule.Process()` 这一行是真正的入口——输入采集、Raycast、事件分发全部从这里开始。
 
-### 11.1.3 核心组件职责一览
+### 12.1.3 核心组件职责一览
 
 | 组件 | 角色 | 一句话 |
 |------|------|--------|
@@ -87,9 +87,9 @@ protected virtual void Update()
 
 ---
 
-## 11.2 输入采集：InputModule 与 PointerEventData
+## 12.2 输入采集：InputModule 与 PointerEventData
 
-### 11.2.1 InputModule 继承结构
+### 12.2.1 InputModule 继承结构
 
 ```
 BaseInputModule
@@ -101,7 +101,7 @@ BaseInputModule
 
 不同 InputModule 的 `Process()` 实现不同，但最终都输出同一种东西：**PointerEventData**。
 
-### 11.2.2 StandaloneInputModule.Process()
+### 12.2.2 StandaloneInputModule.Process()
 
 ```csharp
 public override void Process()
@@ -124,7 +124,7 @@ public override void Process()
 
 `ProcessMouseEvent()` 内部会调用 `GetMousePointerEventData()`，这一步触发 `eventSystem.RaycastAll()`——Raycast 就发生在这里。
 
-### 11.2.3 PointerEventData：跨帧输入状态容器
+### 12.2.3 PointerEventData：跨帧输入状态容器
 
 一次点击从按下到抬起可能跨越多帧，中间状态全部保存在 PointerEventData 中：
 
@@ -147,9 +147,9 @@ public override void Process()
 
 ---
 
-## 11.3 射线检测体系
+## 12.3 射线检测体系
 
-### 11.3.1 EventSystem.RaycastAll：统一调度入口
+### 12.3.1 EventSystem.RaycastAll：统一调度入口
 
 ```csharp
 public void RaycastAll(PointerEventData eventData, List<RaycastResult> raycastResults)
@@ -170,7 +170,7 @@ public void RaycastAll(PointerEventData eventData, List<RaycastResult> raycastRe
 
 EventSystem 不关心 Raycaster 的具体类型——它只管调度。所有 Raycaster 的结果会被合并后统一按 Sorting Layer → Sorting Order → Depth → Distance 排序。
 
-### 11.3.2 RaycasterManager：全局 Raycaster 注册表
+### 12.3.2 RaycasterManager：全局 Raycaster 注册表
 
 ```csharp
 internal static class RaycasterManager
@@ -185,7 +185,7 @@ internal static class RaycasterManager
 
 注册/注销在 `BaseRaycaster.OnEnable` / `OnDisable` 中自动完成。开发者通常不需要手动管理。
 
-### 11.3.3 三种 Raycaster 的实现机制
+### 12.3.3 三种 Raycaster 的实现机制
 
 统一接口 `BaseRaycaster.Raycast()`，三种实现完全不同：
 
@@ -218,7 +218,7 @@ foreach (var hit in hits)
 
 只有 GraphicRaycaster 是"屏幕矩形判断"；PhysicsRaycaster 和 Physics2DRaycaster 都在发射真正的物理射线。
 
-### 11.3.4 GraphicRaycaster.Raycast() 完整流程
+### 12.3.4 GraphicRaycaster.Raycast() 完整流程
 
 ```
 GraphicRegistry.GetGraphicsForCanvas(canvas)   ← 从缓存获取当前 Canvas 的 Graphic 列表（O(1)）
@@ -240,7 +240,7 @@ GraphicRegistry.GetGraphicsForCanvas(canvas)   ← 从缓存获取当前 Canvas 
 
 > **关于 Mask 与 Raycast 的重要说明**：Mask 的裁剪通过 GPU Stencil Buffer 实现，发生在渲染的片元阶段——它只控制像素是否写入帧缓冲，完全不碰 `canvasRenderer.cull`。因此 **Mask 隐藏的子 UI 元素视觉上不可见，但仍然能被点击检测到**。GraphicRaycaster 只认 RectTransform 的矩形范围，不知道 Stencil 裁剪了哪些像素。这和 RectMask2D 不同——RectMask2D 对完全在裁剪区域外的元素会设置 `canvasRenderer.cull = true`，从而同时实现"不可见 + 不可点击"。需要 Mask 的裁剪形状也能阻挡点击时，要用 `ICanvasRaycastFilter` 做自定义过滤。
 
-### 11.3.5 两个 "Raycast" 的区别（重要）
+### 12.3.5 两个 "Raycast" 的区别（重要）
 
 名字都叫 Raycast，但层次不同：
 
@@ -254,7 +254,7 @@ GraphicRegistry.GetGraphicsForCanvas(canvas)   ← 从缓存获取当前 Canvas 
 
 调用关系是 **GraphicRaycaster.Raycast() 内部调用 Graphic.Raycast()**。
 
-### 11.3.6 GraphicRegistry：Canvas → Graphic 映射
+### 12.3.6 GraphicRegistry：Canvas → Graphic 映射
 
 如果每帧 Raycast 都遍历整个场景查找 Graphic，大场景下 CPU 开销不可接受。GraphicRegistry 提前缓存了映射：
 
@@ -277,7 +277,7 @@ public class GraphicRegistry
 
 `IndexedSet<Graphic>` 是 UGUI 自定义容器，内部同时维护 `List<T>`（保持遍历顺序）和 `Dictionary<T, int>`（O(1) 去重）。
 
-### 11.3.7 RaycastTarget 属性详解
+### 12.3.7 RaycastTarget 属性详解
 
 `raycastTarget` 是 `Graphic` 类上的 `[SerializeField]`，默认 `true`。**所有 Graphic 子类都有**：Image、Text、RawImage、MaskableGraphic 等。TMP_Text 不继承 Graphic，但有独立的同名属性。
 
@@ -316,9 +316,9 @@ void DisableRaycastOnChildren(Transform parent)
 
 ---
 
-## 11.4 事件分发：ExecuteEvents 与点击生命周期
+## 12.4 事件分发：ExecuteEvents 与点击生命周期
 
-### 11.4.1 ExecuteEvents：静态事件执行器
+### 12.4.1 ExecuteEvents：静态事件执行器
 
 所有事件最终都通过 `ExecuteEvents` 这个静态类分发：
 
@@ -343,7 +343,7 @@ moveHandler             submitHandler          cancelHandler
 
 **UGUI 的事件系统本质上就是接口回调系统**——GameObject 实现了哪个接口，就能收到对应事件。
 
-### 11.4.2 ExecuteHierarchy 事件冒泡
+### 12.4.2 ExecuteHierarchy 事件冒泡
 
 点击 Text 子节点时，Button 父节点仍然能收到事件：
 
@@ -365,7 +365,7 @@ while (current != null)
 }
 ```
 
-### 11.4.3 一次完整点击的生命周期
+### 12.4.3 一次完整点击的生命周期
 
 ```
 鼠标按下
@@ -393,7 +393,7 @@ while (current != null)
 
 **Click 不是 MouseDown 触发的，而是 MouseUp 后判定的。** 三个条件缺一不可：按下 + 抬起 + 按下和抬起是同一对象。
 
-### 11.4.4 Button.OnClick 的触发链路
+### 12.4.4 Button.OnClick 的触发链路
 
 ```
 Button.OnPointerClick(PointerEventData eventData)
@@ -406,7 +406,7 @@ Button.OnPointerClick(PointerEventData eventData)
 
 Inspector 中拖进去的 `button.onClick.AddListener()` 回调，最终就是 `UnityEvent.Invoke()`。
 
-### 11.4.5 拖拽如何取消 Click
+### 12.4.5 拖拽如何取消 Click
 
 鼠标按下后，如果移动超过 `eventSystem.pixelDragThreshold` 像素（默认 5px），系统会认为进入拖拽状态：
 
@@ -419,7 +419,7 @@ PointerDown → 记录按下位置
 
 这就是 ScrollRect 中 Button 偶尔点不动的根本原因——手指/鼠标在按下和抬起之间有一点点微动，UI 判定为拖拽了。
 
-### 11.4.6 双击检测
+### 12.4.6 双击检测
 
 ```csharp
 // 源码逻辑
@@ -432,7 +432,7 @@ clickTime = Time.unscaledTime;
 
 开发中使用：`if (eventData.clickCount == 2) { /* 双击逻辑 */ }`
 
-### 11.4.7 Button 的高亮/按压状态从哪来
+### 12.4.7 Button 的高亮/按压状态从哪来
 
 Button 继承自 `Selectable`。`Selectable.DoStateTransition()` 根据当前状态主动控制外观：
 
@@ -448,29 +448,29 @@ Button 继承自 `Selectable`。`Selectable.DoStateTransition()` 根据当前状
 
 ---
 
-## 11.5 帧同步与性能优化
+## 12.5 帧同步与性能优化
 
-### 11.5.1 EventSystem 的帧驱动本质
+### 12.5.1 EventSystem 的帧驱动本质
 
 EventSystem 继承 `UIBehaviour → MonoBehaviour`，核心逻辑在 `Update()` 中。每帧执行一次：输入检测 → Raycast → 事件派发。
 
 **输入频率 = 当前帧率。** 30FPS = 每秒 30 次输入更新。低帧率下 Button 点击感觉变慢就是这个原因。
 
-### 11.5.2 timeScale 对 UI 输入的影响
+### 12.5.2 timeScale 对 UI 输入的影响
 
 > ⚠ **勘误**：原文称 `timeScale = 0` 时 UI 输入依然有效，理由是"EventSystem 默认属于 unscaled update"。**这是错的。**
 
 `EventSystem.Update()` 是标准 MonoBehaviour 的 Update，**受 timeScale 控制**。`timeScale = 0` 时 EventSystem 停止更新，所有 UI 输入完全失效。需要暂停游戏又保持 UI 可操作的，要额外处理（把 UI 放到不受 timeScale 影响的机制中）。
 
-### 11.5.3 PointerEventData 的跨帧状态
+### 12.5.3 PointerEventData 的跨帧状态
 
 点击不是单帧完成的——`pointerPress`、`eligibleForClick`、`dragging`、`clickTime`、`clickCount` 这些状态跨帧持续存在。PointerEventData 本质上是一个跨帧的状态机载体。
 
-### 11.5.4 UI 输入与 FixedUpdate 无关
+### 12.5.4 UI 输入与 FixedUpdate 无关
 
 UI 输入始终在 `Update` 中，与 `FixedUpdate` 无关。修改 `Time.fixedDeltaTime` 不影响 UI 点击频率。
 
-### 11.5.5 性能优化要点
+### 12.5.5 性能优化要点
 
 UI 输入的性能开销 = **Raycast 遍历成本 + Canvas 重建成本**。
 
@@ -481,15 +481,15 @@ UI 输入的性能开销 = **Raycast 遍历成本 + Canvas 重建成本**。
 3. **拆分动态 Canvas**：频繁变化的 UI 放独立 Canvas，避免拖累静态 UI 的重建。
 4. **避免深层 Layout 嵌套 + 动态 Text 更新**：它们触发 Layout Rebuild，间接导致 Canvas Rebuild。
 
-### 11.5.6 UI 输入与网络
+### 12.5.6 UI 输入与网络
 
 UGUI 输入是纯本地的。帧同步游戏中（MOBA/RTS），UI 点击通常不走同步通道——只通过 `Button.onClick → 发送 RPC → 服务器逻辑` 手动同步。
 
 ---
 
-## 11.6 新输入系统兼容
+## 12.6 新输入系统兼容
 
-### 11.6.1 架构变化
+### 12.6.1 架构变化
 
 ```
 旧：Input Manager → StandaloneInputModule → PointerEventData → EventSystem
@@ -498,7 +498,7 @@ UGUI 输入是纯本地的。帧同步游戏中（MOBA/RTS），UI 点击通常�
 
 核心变化只有一处：**InputModule 的替换**。EventSystem 和 Raycast 体系完全不变。
 
-### 11.6.2 InputSystemUIInputModule
+### 12.6.2 InputSystemUIInputModule
 
 ```csharp
 public class InputSystemUIInputModule : BaseInputModule
@@ -520,7 +520,7 @@ public class InputSystemUIInputModule : BaseInputModule
 | ScrollWheel | `pointerData.scrollDelta` |
 | Navigate | 键盘/手柄方向 → MoveEvent → 驱动导航选择 |
 
-### 11.6.3 分层设计
+### 12.6.3 分层设计
 
 ```
 Device Layer（鼠标/键盘/手柄/触摸）
@@ -552,8 +552,8 @@ EventSystem 是 UGUI 的"输入中间层"——将多设备输入统一为 Point
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
-| 1 | 🔴 严重 | 11.8.4 | `timeScale = 0` 时 UI 输入依然有效，"UGUI 输入系统默认属于 unscaled update" | EventSystem.Update() 是标准 MonoBehaviour Update，受 timeScale 控制 |
-| 2 | 🟡 中等 | 11.6.10 | "Graphic.Raycast 内部还会检测 Mask、RectMask2D、CanvasGroup" | Mask/RectMask2D 裁剪判断在 GraphicRaycaster.Raycast() 主流程中，不在 Graphic.Raycast() 内部 |
-| 3 | 🟢 轻微 | 11.3.11 / 11.2.9 | 只给出 `IsPointerOverGameObject()` 无参用法 | 无参版本仅检测 PointerId=-1（鼠标左键），移动端/多键场景需传 pointerId |
-| 4 | 🟢 轻微 | 11.7.1 / 11.7.13 | 旧系统"轮询" vs 新系统"事件驱动"的二分对立 | 旧系统同样只在 Process() 中按需读取；差异在抽象层级，非运行模式二分 |
-| 5 | 🟢 轻微 | 11.2.3 | 继承结构写为 PhysicsRaycaster 和 Physics2DRaycaster 平级 | Physics2DRaycaster 继承自 PhysicsRaycaster，非直接继承 BaseRaycaster |
+| 1 | 🔴 严重 | 12.8.4 | `timeScale = 0` 时 UI 输入依然有效，"UGUI 输入系统默认属于 unscaled update" | EventSystem.Update() 是标准 MonoBehaviour Update，受 timeScale 控制 |
+| 2 | 🟡 中等 | 12.6.10 | "Graphic.Raycast 内部还会检测 Mask、RectMask2D、CanvasGroup" | Mask/RectMask2D 裁剪判断在 GraphicRaycaster.Raycast() 主流程中，不在 Graphic.Raycast() 内部 |
+| 3 | 🟢 轻微 | 12.3.11 / 12.2.9 | 只给出 `IsPointerOverGameObject()` 无参用法 | 无参版本仅检测 PointerId=-1（鼠标左键），移动端/多键场景需传 pointerId |
+| 4 | 🟢 轻微 | 12.7.1 / 12.7.13 | 旧系统"轮询" vs 新系统"事件驱动"的二分对立 | 旧系统同样只在 Process() 中按需读取；差异在抽象层级，非运行模式二分 |
+| 5 | 🟢 轻微 | 12.2.3 | 继承结构写为 PhysicsRaycaster 和 Physics2DRaycaster 平级 | Physics2DRaycaster 继承自 PhysicsRaycaster，非直接继承 BaseRaycaster |

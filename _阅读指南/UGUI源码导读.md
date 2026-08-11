@@ -2,6 +2,8 @@
 
 > 本文档不是章节总结，而是**源码阅读指南**——告诉你每个知识点对应 UGUI 源码中的哪个文件、哪个类、哪个方法，以及怎么看懂它们。建议配合 UGUI 源码（Unity-Technologies/uGUI）一起阅读。
 
+> ⚠️ **结构更新（2026-08）**：本书已重构为四部分 25 章，总目录见 `README.md`。本导读仍按旧章节体系编写：旧编号 N 对应新章节请查 README 目录表；其中 TMP 深度分析并入第 16 章、URP/HDRP 并入第 10 章、ScrollRect 并入第 11 章、Profiler 实战并入第 24 章。当前 uGUI main 分支为 `com.unity.ugui` 包结构（`Runtime/UGUI/UI/Core/`、`Runtime/UGUI/EventSystem/`），旧分支（如 2019.1）为 `UnityEngine.UI/UI/`。
+
 > ⚠️ **注意**：Canvas、CanvasRenderer、RectTransform 是 Unity 引擎内置组件（位于 UnityEngine.CoreModule），不在 uGUI 仓库中。它们在 C# 侧暴露了部分 API，但核心方法标记为 `[NativeMethod]`，由引擎 C++ 实现。uGUI 仓库（`UnityEngine.UI/`）主要包含 UI 组件的 C# 源码，以及事件系统（EventSystem/）。
 
 ---

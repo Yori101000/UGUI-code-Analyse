@@ -1,10 +1,10 @@
-# 第7章 Canvas系统
+# 第6章 Canvas系统
 
 > 本章对应原书结构中的第6章（基础理论部分）。Canvas是UGUI中承上启下的核心组件——所有UI元素必须挂载在Canvas下才能被渲染，它是连接UI数据（Graphic生成的网格）与渲染管线（GPU DrawCall）的核心枢纽。
 
 ---
 
-## 7.1 Canvas的核心定位
+## 6.1 Canvas的核心定位
 
 在UGUI的三层架构中，Canvas处于**系统层**的最核心位置：
 
@@ -26,7 +26,7 @@
 └──────────────────────────────────────┘
 ```
 
-### 7.1.1 没有Canvas会怎样
+### 6.1.1 没有Canvas会怎样
 
 任何UI组件（Image、Text、Button等）如果不在Canvas的子级，在编辑器中会看到这样的提示：
 
@@ -36,7 +36,7 @@
 
 原因很简单：**没有Canvas，Graphic生成的Mesh就没人去收集、合并、提交给GPU。**
 
-### 7.1.2 Canvas在UGUI中的角色
+### 6.1.2 Canvas在UGUI中的角色
 
 | 角色 | 对应机制 | 说明 |
 |------|---------|------|
@@ -47,11 +47,11 @@
 
 ---
 
-## 7.2 Canvas的三大职责
+## 6.2 Canvas的三大职责
 
 Canvas承担三个职责，缺一不可。
 
-### 7.2.1 职责一：组织UI层级结构
+### 6.2.1 职责一：组织UI层级结构
 
 Canvas下的所有UI元素构成一个**渲染层级树**。Canvas通过以下维度管理谁在上、谁在下：
 
@@ -60,9 +60,9 @@ Canvas下的所有UI元素构成一个**渲染层级树**。Canvas通过以下�
 - **Hierarchy顺序**（层级面板中的先后）
 - **Camera Depth**（Camera模式下）
 
-这些规则将在7.4节详细展开。
+这些规则将在6.4节详细展开。
 
-### 7.2.2 职责二：控制渲染模式
+### 6.2.2 职责二：控制渲染模式
 
 Canvas的`renderMode`属性决定了UI以何种方式接入Unity渲染管线。这种选择直接影响：
 
@@ -71,9 +71,9 @@ Canvas的`renderMode`属性决定了UI以何种方式接入Unity渲染管线。�
 - UI是否参与深度排序
 - UI是否受透视投影影响
 
-三种模式（Overlay / Camera / WorldSpace）的详细差异见7.3节。
+三种模式（Overlay / Camera / WorldSpace）的详细差异见6.3节。
 
-### 7.2.3 职责三：执行批处理与渲染提交
+### 6.2.3 职责三：执行批处理与渲染提交
 
 这是Canvas最底层、最关键的职责。在每帧渲染循环中，Unity引擎会调用`Canvas.BuildBatch()`方法（native实现，C#侧不可见），执行以下操作：
 
@@ -86,7 +86,7 @@ Canvas的`renderMode`属性决定了UI以何种方式接入Unity渲染管线。�
 
 ---
 
-## 7.3 三种Render Mode详解
+## 6.3 三种Render Mode详解
 
 `Canvas.renderMode`是一个枚举类型，定义在UGUI源码中：
 
@@ -100,7 +100,7 @@ public enum RenderMode
 }
 ```
 
-### 7.3.1 Screen Space - Overlay（覆盖模式）
+### 6.3.1 Screen Space - Overlay（覆盖模式）
 
 **Overlay是默认且最常用的模式。**
 
@@ -129,7 +129,7 @@ Canvas 组件
 └── Order in Layer: 0
 ```
 
-### 7.3.2 Screen Space - Camera（摄像机模式）
+### 6.3.2 Screen Space - Camera（摄像机模式）
 
 UI绑定到特定Camera，参与该Camera的完整渲染流程。
 
@@ -163,7 +163,7 @@ Canvas 组件
 - 希望UI只被特定Camera渲染（如VR中的左右眼Camera）
 - UI需要被Camera Stack中的Overlay Camera单独控制
 
-### 7.3.3 World Space（世界空间模式）
+### 6.3.3 World Space（世界空间模式）
 
 Canvas完全进入三维世界坐标体系，UI作为3D物体存在于场景中。
 
@@ -195,7 +195,7 @@ Canvas 组件
 - VR/AR中的空间UI
 - UI与3D物体融合的特效场景
 
-### 7.3.4 三种模式行为对比
+### 6.3.4 三种模式行为对比
 
 | 维度 | Overlay | Camera | World Space |
 |------|---------|--------|-------------|
@@ -210,11 +210,11 @@ Canvas 组件
 
 ---
 
-## 7.4 Canvas的排序规则
+## 6.4 Canvas的排序规则
 
 UI的渲染层级是一个多因素共同决定的复杂问题。Canvas作为层级的组织者，其排序规则按渲染模式有所不同。
 
-### 7.4.1 基本排序要素
+### 6.4.1 基本排序要素
 
 所有Canvas都具备以下排序属性：
 
@@ -241,7 +241,7 @@ public class Canvas : Behaviour
 | **Hierarchy顺序** | Hierarchy中的先后位置 | 同级Canvas的最终回退规则 |
 | **planeDistance** | planeDistance | Camera/WorldSpace模式下，按距离排序 |
 
-### 7.4.2 Overlay模式的排序
+### 6.4.2 Overlay模式的排序
 
 Overlay Canvas不依赖Camera，排序规则相对简单：
 
@@ -264,7 +264,7 @@ Overlay Canvas不依赖Camera，排序规则相对简单：
 // 结果：Canvas C 在 Canvas D 之上（Sorting Layer优先级更高）
 ```
 
-### 7.4.3 Camera/WorldSpace模式的排序
+### 6.4.3 Camera/WorldSpace模式的排序
 
 当Canvas绑定到Camera或处于WorldSpace时，排序规则多了一层Camera的介入：
 
@@ -279,7 +279,7 @@ Overlay Canvas不依赖Camera，排序规则相对简单：
 
 > **关键结论**：Camera的叠加顺序优先级高于Canvas Sorting Order。例如Camera A（depth=0）上有一个sortingOrder=100的UI，Camera B（depth=1）上有一个sortingOrder=0的UI——最终Camera B上的UI会覆盖Camera A上的UI，因为Camera B执行渲染的顺序更晚。
 
-### 7.4.4 Hierarchy顺序的作用范围
+### 6.4.4 Hierarchy顺序的作用范围
 
 Hierarchy顺序只有在**同级Canvas**且所有其他排序因素都相同时才起作用。在以下情况下Hierarchy顺序被忽略：
 
@@ -289,9 +289,9 @@ Hierarchy顺序只有在**同级Canvas**且所有其他排序因素都相同时�
 
 ---
 
-## 7.5 Canvas.BuildBatch()与批处理
+## 6.5 Canvas.BuildBatch()与批处理
 
-### 7.5.1 BuildBatch的工作机制
+### 6.5.1 BuildBatch的工作机制
 
 `Canvas.BuildBatch()`是整个UI渲染流程的**最终提交阶段**。它在C#侧的定义非常简单：
 
@@ -335,7 +335,7 @@ Canvas.BuildBatch()
     └─ 每组产生一个DrawCall
 ```
 
-### 7.5.2 Canvas是Batch的边界
+### 6.5.2 Canvas是Batch的边界
 
 **不同Canvas之间的UI元素永远不会合并在同一个Batch中。**
 
@@ -359,7 +359,7 @@ Canvas B (Sorting Order = 10)
      ↓ 但与Canvas A的DrawCall不能合并 ❌
 ```
 
-### 7.5.3 为什么不同Canvas不能合批
+### 6.5.3 为什么不同Canvas不能合批
 
 这是Unity引擎的设计决策，原因有三：
 
@@ -369,7 +369,7 @@ Canvas B (Sorting Order = 10)
 
 3. **渲染模式差异性**：不同Canvas可能使用不同的renderMode（一个Overlay，一个Camera），其顶点所处的坐标空间不同，无法直接合并。
 
-### 7.5.4 BuildBatch的触发时机
+### 6.5.4 BuildBatch的触发时机
 
 Canvas在以下情况下会触发BuildBatch：
 
@@ -383,9 +383,9 @@ Canvas在以下情况下会触发BuildBatch：
 
 ---
 
-## 7.6 Canvas关键源码解析
+## 6.6 Canvas关键源码解析
 
-### 7.6.1 Canvas核心属性
+### 6.6.1 Canvas核心属性
 
 以下是Canvas中C#侧可见的核心成员：
 
@@ -457,7 +457,7 @@ canvas.sortingOrder = 100;
 canvas.pixelPerfect = true;
 ```
 
-### 7.6.2 CanvasScaler与scaleFactor
+### 6.6.2 CanvasScaler与scaleFactor
 
 `CanvasScaler`是挂载在Canvas上的常见组件，它的核心职责就是**修改Canvas.scaleFactor**来实现UI适配。
 
@@ -528,7 +528,7 @@ canvas.scaleFactor = 2.0f;  // UI整体放大2倍
 
 > **注意**：直接修改`Canvas.scaleFactor`和通过`CanvasScaler`修改效果相同——CanvasScaler只是封装了计算逻辑，最终赋值给同一个属性。如果你手动设置了`canvas.scaleFactor`，CanvasScaler的自动计算会被覆盖。
 
-### 7.6.3 Inspector面板中的Canvas配置
+### 6.6.3 Inspector面板中的Canvas配置
 
 Canvas组件在Inspector中的完整配置项：
 
@@ -561,9 +561,9 @@ Canvas 组件
 
 ---
 
-## 7.7 多Canvas架构
+## 6.7 多Canvas架构
 
-### 7.7.1 为什么要拆分多Canvas
+### 6.7.1 为什么要拆分多Canvas
 
 在大型UI系统中，单个Canvas往往不够用。常见的多Canvas拆分策略：
 
@@ -574,7 +574,7 @@ Canvas 组件
 | **排序需求** | 不同层级的UI需要不同的Sorting Layer或Order范围 |
 | **Camera分离** | 某些UI需要绑定不同Camera（如UI Camera + 场景Camera） |
 
-### 7.7.2 典型拆分策略
+### 6.7.2 典型拆分策略
 
 **双层结构**（最常见）：
 
@@ -601,7 +601,7 @@ Canvas B (Overlay, Sorting Order = 0)
   └── HUD和操作界面（不受后处理影响）
 ```
 
-### 7.7.3 多Canvas的性能收益
+### 6.7.3 多Canvas的性能收益
 
 ```csharp
 // 反面示例：所有UI放在一个超大Canvas中
@@ -617,11 +617,11 @@ Canvas B (Overlay, Sorting Order = 0)
 
 ---
 
-## 7.8 Canvas与其它核心组件的关系
+## 6.8 Canvas与其它核心组件的关系
 
 理解Canvas在UGUI系统中的位置，需要理清它与另外两个关键组件的关系。
 
-### 7.8.1 Canvas vs Graphic
+### 6.8.1 Canvas vs Graphic
 
 | 维度 | Canvas | Graphic |
 |------|--------|---------|
@@ -632,7 +632,7 @@ Canvas B (Overlay, Sorting Order = 0)
 
 **谁先执行**：Graphic先执行（OnPopulateMesh生成数据 → SetMesh存入CanvasRenderer），然后Canvas再执行BuildBatch从CanvasRenderer读取数据并提交。
 
-### 7.8.2 Canvas vs CanvasRenderer
+### 6.8.2 Canvas vs CanvasRenderer
 
 | 维度 | Canvas | CanvasRenderer |
 |------|--------|---------------|
@@ -643,9 +643,9 @@ Canvas B (Overlay, Sorting Order = 0)
 
 ---
 
-## 7.9 AdditionalShaderChannels：顶点数据通道控制
+## 6.9 AdditionalShaderChannels：顶点数据通道控制
 
-### 7.9.1 是什么
+### 6.9.1 是什么
 
 `Canvas.additionalShaderChannels` 控制哪些顶点附加数据从 CPU 传递到 GPU Shader。默认只传 `position`、`color`、`uv0`，其余通道静默丢弃。
 
@@ -662,7 +662,7 @@ public enum AdditionalCanvasShaderChannels
 }
 ```
 
-### 7.9.2 功能对照表
+### 6.9.2 功能对照表
 
 | 功能 | 需要 | 原因 |
 |------|------|------|
@@ -674,7 +674,7 @@ public enum AdditionalCanvasShaderChannels
 
 未开启通道时数据被静默丢弃——TMP 渲染为纯色块是最常见的表现。
 
-### 7.9.3 带宽成本
+### 6.9.3 带宽成本
 
 | 配置 | 单顶点大小 | 1万顶点 Canvas |
 |------|-----------|---------------|
@@ -686,7 +686,7 @@ public enum AdditionalCanvasShaderChannels
 
 按需开启，避免不必要带宽浪费。
 
-### 7.9.4 最佳实践
+### 6.9.4 最佳实践
 
 - TMP 项目 → `TexCoord2`
 - 无 TMP → `None`

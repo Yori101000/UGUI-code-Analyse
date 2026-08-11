@@ -1,4 +1,4 @@
-# 第13章 Mask 与裁剪机制
+# 第15章 Mask 与裁剪机制
 
 > 本文是对原文第 13、14 章的合并重写——原文将 Mask 和 RectMask2D 分两章但共用大量重复的 Stencil 讲解内容（"写入+测试"机制在 13.1、13.2、13.3 中重复三次），且第 14 章 RectMask2D 独立成章后与第 13 章的性能对比节大量重叠。现合并为一章，按 Mask → RectMask2D → 性能对比 → 选择指南的结构组织。补充了原文缺失的 `IMaskable` 接口机制和 `StencilMaterial.Add()` 源码分析。对照 UGUI 源码修正了 7 处错误/不准确表述。
 
@@ -20,11 +20,11 @@ UGUI 提供两种裁剪机制：
 
 ---
 
-## 13.1 Mask：基于 Stencil Buffer 的裁剪
+## 15.1 Mask：基于 Stencil Buffer 的裁剪
 
-> 如果你已经理解 UGUI 渲染管线（第 9 章：Graphic → CanvasRenderer → Canvas.BuildBatch → GPU），这一节可以在已有知识上直接建立 Mask 的心智模型。
+> 如果你已经理解 UGUI 渲染管线（第 10 章：Graphic → CanvasRenderer → Canvas.BuildBatch → GPU），这一节可以在已有知识上直接建立 Mask 的心智模型。
 
-### 13.1.0 从一个具体问题出发
+### 15.1.0 从一个具体问题出发
 
 你在 Unity 里给一个 GameObject 挂上 Mask 组件，子节点是一张超出父节点边界的图片。运行后，超出部分看不到了。
 
@@ -32,7 +32,7 @@ Mask 既不砍顶点（对比 RectMask2D 干掉整个元素的顶点），也不
 
 要理解这个过程，首先得知道 GPU 里有一块叫 Stencil Buffer 的东西。
 
-### 13.1.1 Stencil Buffer：GPU 给你的草稿纸
+### 15.1.1 Stencil Buffer：GPU 给你的草稿纸
 
 GPU 渲染时维护着几块"画布"，每块画布的每个像素位置都存着数据：
 
@@ -46,7 +46,7 @@ GPU 渲染时维护着几块"画布"，每块画布的每个像素位置都存�
 
 类比你用一张镂空卡片盖在纸上画画：只往镂空的地方涂色，被卡片挡住的地方不涂。Stencil Buffer 就是这张卡片——但不是物理盖住，而是每画一笔之前，GPU 先检查"这个像素在我的标记范围内吗？"。
 
-### 13.1.2 Mask 需要两个组件在同一个 GameObject 上
+### 15.1.2 Mask 需要两个组件在同一个 GameObject 上
 
 ```
 GameObject (带 Mask)
@@ -58,7 +58,7 @@ GameObject (带 Mask)
 
 遮罩形状由 Image 的 Alpha 通道决定——圆形图片的圆形区域不透明→写 Stencil，四个角透明→不写 Stencil。这就是为什么圆形图片能做出圆形遮罩。没有 Graphic 的 Mask 是无效的（没有形状可渲染，就没有东西写 Stencil）。
 
-### 13.1.3 核心机制：先写标记，再检查
+### 15.1.3 核心机制：先写标记，再检查
 
 Mask 的工作分两步，按 GPU 实际执行顺序来理解。
 
@@ -100,7 +100,7 @@ Mask 下面的子节点（Button、Text、各种 Image）开始渲染。它们�
 
 结果：子节点像素位置 Stencil=1（被 Mask Image 覆盖过）→ 正常显示。Stencil=0（在 Mask Image 范围外）→ GPU 扔掉了，屏幕上看不到。
 
-### 13.1.4 一个具体帧的完整例子
+### 15.1.4 一个具体帧的完整例子
 
 假设场景结构：
 ```
@@ -116,7 +116,7 @@ Mask（挂 Mask 组件 + 圆形 Alpha 图）
 4. **渲染 Background**：片元着色器算出每个像素颜色 → Stencil Equal 测试 → 圆形区域内 Stencil=1 通过，写入 Color Buffer → 圆形外 Stencil=0 失败，丢弃
 5. **最终屏幕**：Background 只在圆形区域内可见
 
-### 13.1.5 Mask 组件在 CPU 侧具体做了什么
+### 15.1.5 Mask 组件在 CPU 侧具体做了什么
 
 上面讲的是 GPU 行为。Mask 组件在 CPU 侧做了三件事来让这一切发生：
 
@@ -166,7 +166,7 @@ StencilMaterial.Add(
 
 `MaskUtilities.GetStencilDepth(transform, stopAfter)` 通过遍历 `transform.parent` 向上查找 Mask 祖先来计算嵌套深度。这是纯粹的 Transform 树逻辑，不是"Canvas 渲染层级"——原文此处有严重错误。
 
-### 13.1.6 嵌套 Mask
+### 15.1.6 嵌套 Mask
 
 Mask 可以嵌套。每次嵌套，深度 +1，Stencil 参考值随之变化：
 
@@ -182,7 +182,7 @@ Mask A（深度 1，写 ref=1，子节点测 ref=1）
 
 每层嵌套至少创建一个新的材质实例 → Stencil 状态不同 → 打断合批。
 
-### 13.1.7 为什么 Mask 会打断合批（以及为什么 RectMask2D 不会）
+### 15.1.7 为什么 Mask 会打断合批（以及为什么 RectMask2D 不会）
 
 UGUI 合批的条件是"使用完全相同的 Material 实例"（同一个 C# 对象引用，不是"相似的"材质）。
 
@@ -205,9 +205,9 @@ Mask A 自己的 Image（Replace ref=1）       → Batch 2（材质实例 ≠ B
 
 ---
 
-## 13.2 RectMask2D：基于矩形裁剪
+## 15.2 RectMask2D：基于矩形裁剪
 
-### 13.2.1 工作原理
+### 15.2.1 工作原理
 
 RectMask2D **完全不经过 Stencil**。它的裁剪分为两个阶段：
 
@@ -257,7 +257,7 @@ RectMask2D **不会修改子节点的顶点数据，不会裁剪 Mesh**。子节
 - ✅ Batch 结构通常可以保持（材质未变）
 - ✅ 片元填充区域减少（超出矩形的像素被丢弃）
 
-### 13.2.2 关键代码逻辑
+### 15.2.2 关键代码逻辑
 
 RectMask2D 维护的 `m_ClipTargets` 是 `List<IClippable>`，不是 CanvasRenderer 列表。裁剪操作通过接口调用传递：
 
@@ -311,7 +311,7 @@ RectMask2D.PerformClipping()
        → canvasRenderer.EnableRectClipping(clipRect)
 ```
 
-### 13.2.3 与 Mask 的本质区别
+### 15.2.3 与 Mask 的本质区别
 
 | 维度 | Mask | RectMask2D |
 |------|------|------|
@@ -322,7 +322,7 @@ RectMask2D.PerformClipping()
 | 软遮罩（渐变边缘） | ✅（Alpha 半透明区域写入部分 Stencil） | ❌ |
 | 所需依赖 | Image+Mask 组件 | 仅 RectMask2D 组件 |
 
-### 13.2.4 RectMask2D 的局限性
+### 15.2.4 RectMask2D 的局限性
 
 - **只能做矩形裁剪**——圆形头像、不规则遮罩、Alpha 通道裁剪全部无法支持
 - **旋转的 RectTransform 裁剪不精确**——裁剪矩形是轴对齐包围盒（AABB），旋转后实际形状可能是菱形或不规则四边形，但裁剪区域始终是矩形
@@ -331,9 +331,9 @@ RectMask2D.PerformClipping()
 
 ---
 
-## 13.3 裁剪对合批与性能的影响
+## 15.3 裁剪对合批与性能的影响
 
-### 13.3.1 Mask 为什么必然打断合批
+### 15.3.1 Mask 为什么必然打断合批
 
 合批的前提是**相同的 Material 实例**。`StencilMaterial.Add()` 内部有缓存：**相同 Stencil 参数返回同一实例，不同参数才创建新实例。**
 
@@ -349,7 +349,7 @@ N 层嵌套 Mask                         → 2N 个不同 Stencil 参数组合�
   → Batch 数 = 不同 Stencil 参数组合数，不是 Graphic 数量
 ```
 
-### 13.3.2 RectMask2D 对合批的影响
+### 15.3.2 RectMask2D 对合批的影响
 
 RectMask2D 不修改材质——它只在 CanvasRenderer 上设置裁剪矩形：
 
@@ -358,7 +358,7 @@ RectMask2D 不修改材质——它只在 CanvasRenderer 上设置裁剪矩形�
 
 这就是为什么 ScrollView 必须用 RectMask2D 而不是 Mask——列表中的几十个 Item 可以共享同一个 DrawCall，而 Mask 会把每个深度的元素都拆到不同的 Batch。
 
-### 13.3.3 全维度性能对比
+### 15.3.3 全维度性能对比
 
 | 维度 | Mask | RectMask2D |
 |------|------|------|
@@ -388,14 +388,14 @@ RectMask2D 的 CPU 开销高于 Mask（每帧计算裁剪矩形），但 GPU 开
 
 因此移动项目的经验法则是：**能用 RectMask2D 就不用 Mask，能减少嵌套就减少嵌套，能避免 Stencil 就避免 Stencil。**
 
-### 13.3.4 嵌套的代价
+### 15.3.4 嵌套的代价
 
 - **嵌套 Mask**：每层创建一个新 Stencil 状态材质 → 材质实例数 = 嵌套深度 → Batch 按深度分裂。实际开发应严格控制深度，通常不超过 2 层。
 - **嵌套 RectMask2D**：每个 RectMask2D 独立执行裁剪，子 RectMask2D 的有效裁剪区域是自身矩形与父裁剪矩形的交集。
 
 ---
 
-## 13.4 实战选择指南
+## 15.4 实战选择指南
 
 ### 决策树
 
@@ -406,7 +406,7 @@ RectMask2D 的 CPU 开销高于 Mask（每帧计算裁剪矩形），但 GPU 开
   │      代价：额外 DrawCall + 材质实例
   │      优化：用简单 Graphic 做遮罩（减少 Mask Image 顶点数）
   │      Trick：Mask Image 的 color.a = 0 → 遮罩不可见但 Stencil 正常工作
-  │      注意：Mask 裁剪掉的区域仍可被点击（见第 11 章勘误）
+  │      注意：Mask 裁剪掉的区域仍可被点击（见第 12 章勘误）
   │
   └── 否 → RectMask2D
            场景：ScrollView、聊天/背包/排行榜列表、窗口裁剪
@@ -470,7 +470,7 @@ Mask 系统
 
 两者不是替代关系，是互补关系。选型的核心判断只有一个：**是否需要不规则形状？** 需要 → Mask，不需要 → RectMask2D。
 
-本章与第 9 章（渲染管线）、第 11 章（EventSystem 点击检测）、第 12 章（图集/合批）之间的关系：渲染管线决定了 UI 的顶点生成和 Batch 构建顺序；图集解决的是 Texture 统一（减少纹理切换）；EventSystem 的 Raycast 检测不受 Mask（Stencil）影响但受 RectMask2D（cull）影响；Mask/RectMask2D 则在合批基础上引入了额外的渲染状态条件（Stencil 状态或裁剪矩形）。
+本章与第 10 章（渲染管线）、第 12 章（EventSystem 点击检测）、第 14 章（图集/合批）之间的关系：渲染管线决定了 UI 的顶点生成和 Batch 构建顺序；图集解决的是 Texture 统一（减少纹理切换）；EventSystem 的 Raycast 检测不受 Mask（Stencil）影响但受 RectMask2D（cull）影响；Mask/RectMask2D 则在合批基础上引入了额外的渲染状态条件（Stencil 状态或裁剪矩形）。
 
 ---
 
@@ -478,11 +478,11 @@ Mask 系统
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
-| 1 | 🔴 严重 | 13.1.1 | "Mask 的作用范围是基于 Canvas 渲染层级的，而不是 Transform 空间意义上的父子关系" | Mask 作用范围精确基于 Transform 层级。`MaskUtilities.GetStencilDepth()` 逐级遍历 `transform.parent` 查找 Mask 祖先 |
-| 2 | 🟡 中等 | 13.1.1 | "Mask 自身所在的 UI 节点，该节点负责定义裁剪区域的形状" | Mask 组件本身不渲染任何东西——渲染遮罩形状的是同 GameObject 上的 Graphic。没有 Graphic 的 Mask 无效 |
-| 3 | 🟡 中等 | 13.3.6 | RectMask2D "发生在 CPU 剔除阶段，基于包围盒判断" | 不准确——RectMask2D 同时做 CPU 剔除（完全在外）+ GPU 裁剪（部分在内），不是单纯的"包围盒判断" |
+| 1 | 🔴 严重 | 15.1.1 | "Mask 的作用范围是基于 Canvas 渲染层级的，而不是 Transform 空间意义上的父子关系" | Mask 作用范围精确基于 Transform 层级。`MaskUtilities.GetStencilDepth()` 逐级遍历 `transform.parent` 查找 Mask 祖先 |
+| 2 | 🟡 中等 | 15.1.1 | "Mask 自身所在的 UI 节点，该节点负责定义裁剪区域的形状" | Mask 组件本身不渲染任何东西——渲染遮罩形状的是同 GameObject 上的 Graphic。没有 Graphic 的 Mask 无效 |
+| 3 | 🟡 中等 | 15.3.6 | RectMask2D "发生在 CPU 剔除阶段，基于包围盒判断" | 不准确——RectMask2D 同时做 CPU 剔除（完全在外）+ GPU 裁剪（部分在内），不是单纯的"包围盒判断" |
 | 4 | 🟡 中等 | 全文 | 大量讲解 Stencil 原理但完全不提 `IMaskable` 接口和 `StencilMaterial.Add()` | `IMaskable.RecalculateMasking()` 是 Mask 向子节点传递材质修改的桥梁——理解 Mask 如何生效的核心机制 |
 | 5 | 🟡 中等 | 14.1.7 | "多层RectMask2D嵌套...最终裁剪区域为两者重叠部分" | 过于笼统——子 RectMask2D 的有效裁剪区域 = 自身裁剪矩形 ∩ 父裁剪矩形。嵌套时裁剪区域只会缩小不会扩大，这是关键行为约束 |
 | 6 | 🟢 轻微 | 14.2 | 原文将 Mask 和 RectMask2D 分两章，但第 14 章的性能对比内容（14.2）与第 13 章高度重叠 | 两章共用大量重复的 Stencil 讲解，且 14.2 性能对比的表格与第 13 章已有的对比结构基本重复 |
 | 7 | 🟢 轻微 | 14.3 | 大量使用场景小节（14.3.2~14.3.5）的核心论点重复——都是"能用 RectMask2D 就不用 Mask" | 各小节差异只在举例界面名称不同（商城/卡牌/技能树 vs 聊天/背包/排行榜），本质是同一论点的多次换皮 |
-| 8 | 🟢 轻微 | 13.1.5 / 13.3.1 | "Mask 的渲染阶段位置"与"Mask 对 Canvas 渲染阶段的插入位置" | 内容高度重叠——都在描述 Mask 在渲染管线中的位置 |
+| 8 | 🟢 轻微 | 15.1.5 / 15.3.1 | "Mask 的渲染阶段位置"与"Mask 对 Canvas 渲染阶段的插入位置" | 内容高度重叠——都在描述 Mask 在渲染管线中的位置 |

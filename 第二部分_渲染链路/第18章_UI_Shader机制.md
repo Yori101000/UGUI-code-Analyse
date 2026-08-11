@@ -1,4 +1,4 @@
-# 第17章 UI Shader 机制
+# 第18章 UI Shader 机制
 
 > 本文是对原文第 17 章的结构化重写，合并了原文 17.1 与 17.2 中完全重复的 Shader 结构讲解（Transparent Queue、ZWrite Off、Blend、顶点颜色等在两节中重复解释），精简了 17.5（Stencil）与第 13 章重复的内容，将其聚焦在 Shader 代码层面如何实现 Stencil。对照 UGUI 源码修正了 5 处错误/不准确表述。
 
@@ -11,7 +11,7 @@
 Shader 在 UGUI 中的定位：
 
 ```
-第9、16章（Mesh 构建）                     第17章（Shader）
+第10、17章（Mesh 构建）                     第18章（Shader）
 OnPopulateMesh → VertexHelper → Mesh → CanvasRenderer.SetMesh()
                                               ↓
                                          Material + Shader
@@ -36,7 +36,7 @@ UI Shader 和普通 3D Shader 的核心区别：
 
 ---
 
-## 17.1 Default UI Shader 完整解析
+## 18.1 Default UI Shader 完整解析
 
 UGUI 中所有 Image、Text、RawImage，在未指定自定义材质时，最终都使用 `UI/Default` Shader。它不追求视觉效果——它追求的是**稳定适配整个 Canvas 渲染体系**。
 
@@ -145,7 +145,7 @@ Stencil
 
 **关键点**：这些值不是硬编码在 Shader 里的。UGUI 的 Mask 组件通过 `StencilMaterial.Add()` 创建一个新的 Material 实例，把这些参数写入 Material 的 `[PerRendererData]` 属性。GPU 渲染时从 Material 读取这些值。同一个 Shader 可以同时服务于"被 Mask 遮罩的 UI"和"没被遮罩的 UI"——区别仅在于 Material 的 Stencil 参数不同。
 
-这也解释了为什么 Mask 打断合批：**同一个 Shader 但不同的 Material 实例（Stencil 参数不同），就是不同的 GPU 渲染状态，不能合批。**（详见第 13 章 13.1.7）
+这也解释了为什么 Mask 打断合批：**同一个 Shader 但不同的 Material 实例（Stencil 参数不同），就是不同的 GPU 渲染状态，不能合批。**（详见第 15 章 15.1.7）
 
 **④ `Cull Off`**
 
@@ -155,7 +155,7 @@ Stencil
 
 **不写入深度缓冲。** UI 不依赖深度缓冲决定遮挡关系——遮挡由 Canvas 的 Hierarchy 顺序和 Sorting Order 决定。如果开启 ZWrite，一个半透明 UI 写入深度后，它后面的 UI 即使应该显示，也会被深度测试错误剔除。
 
-这与第 9 章渲染管线中"UI 使用透明队列+层级排序"的说法一致。
+这与第 10 章渲染管线中"UI 使用透明队列+层级排序"的说法一致。
 
 **⑥ `ZTest [unity_GUIZTestMode]`**
 
@@ -203,7 +203,7 @@ fixed4 color = tex2D(_MainTex, IN.texcoord) * IN.color;
 
 ---
 
-## 17.2 顶点数据从 UIVertex 到 Shader 的完整传递
+## 18.2 顶点数据从 UIVertex 到 Shader 的完整传递
 
 UGUI 在 CPU 侧构建的顶点数据如何到达 GPU Shader？这条链路连接了第 9~16 章的所有内容：
 
@@ -251,13 +251,13 @@ Blend 阶段与屏幕已有颜色混合 → 写入帧缓冲
 **额外通道 uv1/uv2/uv3 的用途**：
 
 - **uv1**：`PositionAsUV1` 效果使用——把顶点位置写入 uv1，供 Shader 在 Fragment 阶段读取位置信息做效果（如扭曲、波浪、UV 动画）
-- **normal/tangent**：TMP 的 SDF Shader 需要法线和切线来计算距离场的屏幕空间衍生（第 15 章）
+- **normal/tangent**：TMP 的 SDF Shader 需要法线和切线来计算距离场的屏幕空间衍生（第 16 章）
 
 ---
 
-## 17.3 Blend 与 Overdraw
+## 18.3 Blend 与 Overdraw
 
-### 17.3.1 UI 的 Alpha 来源链
+### 18.3.1 UI 的 Alpha 来源链
 
 UI 的最终 Alpha 不是来自单一系统，而是多层叠加：
 
@@ -273,7 +273,7 @@ UI 的最终 Alpha 不是来自单一系统，而是多层叠加：
 
 CanvasGroup 修改的就是 `UIVertex.color.a`，然后通过 Shader 中的 `IN.color` 传递到 Fragment Shader。所以 CanvasGroup 不产生额外 DrawCall——它只是修改了顶点颜色中的 Alpha。
 
-### 17.3.2 三种常用 Blend 模式
+### 18.3.2 三种常用 Blend 模式
 
 | Blend 模式 | Shader 指令 | 计算公式 | 适用场景 |
 |-----------|------------|---------|---------|
@@ -293,7 +293,7 @@ Premultiplied Alpha 不会出现这个问题，但纹理必须在导入时（或
 
 Additive Blend 适合发光效果，但容易过曝——颜色不断累加，最终变白。
 
-### 17.3.3 Overdraw：UI 最大的 GPU 成本
+### 18.3.3 Overdraw：UI 最大的 GPU 成本
 
 UI 的 GPU 压力主要来自 Blend，而不是 Shader 本身有多复杂。因为每绘制一个半透明像素，GPU 都要读取屏幕已有颜色做混合计算，而 UI 天然大量重叠。
 
@@ -315,16 +315,16 @@ UI 的 GPU 压力主要来自 Blend，而不是 Shader 本身有多复杂。因�
 
 **两个要注意的点：**
 
-1. **Mask 和 RectMask2D 都不减少 Overdraw**（第 13 章已说明）——被裁剪的像素仍然执行完 Fragment Shader，只在 Blend/Stencil 阶段前被丢弃
+1. **Mask 和 RectMask2D 都不减少 Overdraw**（第 15 章已说明）——被裁剪的像素仍然执行完 Fragment Shader，只在 Blend/Stencil 阶段前被丢弃
 2. **大量半透明 UI 重叠时，DrawCall 不高但 GPU 可能已经满载**——因为每个像素被反复混合
 
 ---
 
-## 17.4 Stencil 在 Shader 中的实现
+## 18.4 Stencil 在 Shader 中的实现
 
-本节侧重 Shader 代码层面如何实现 Stencil，与第 13 章（Mask 的组件结构和传播机制）形成互补。Stencil Buffer 的基本概念（什么是 Stencil Buffer、写入+测试的两阶段机制）在第 13 章已详细讲过，这里不再重复。
+本节侧重 Shader 代码层面如何实现 Stencil，与第 15 章（Mask 的组件结构和传播机制）形成互补。Stencil Buffer 的基本概念（什么是 Stencil Buffer、写入+测试的两阶段机制）在第 15 章已详细讲过，这里不再重复。
 
-### 17.4.1 Shader 中的 Stencil 块
+### 18.4.1 Shader 中的 Stencil 块
 
 Default UI Shader 中的 Stencil 块使用 Material 属性，而非硬编码值：
 
@@ -363,9 +363,9 @@ StencilMaterial.Add(
 
 **所以一个不涉及 Mask 的普通 UI 使用的是没有 Stencil 参数的默认 Material，而一个被 Mask 遮罩的 UI 使用的是带有 Stencil 参数的另一个 Material 实例。** 即使它们使用同一个 Shader，也因为 Material 实例不同而无法合批。
 
-### 17.4.2 嵌套 Mask 的 Stencil 值计算
+### 18.4.2 嵌套 Mask 的 Stencil 值计算
 
-第 13 章已经解释了 `MaskUtilities.GetStencilDepth()` 遍历 transform.parent 统计 Mask 深度的机制。从 Shader 角度来看，不同深度对应不同的 `_Stencil` 值：
+第 15 章已经解释了 `MaskUtilities.GetStencilDepth()` 遍历 transform.parent 统计 Mask 深度的机制。从 Shader 角度来看，不同深度对应不同的 `_Stencil` 值：
 
 ```
 深度 0（无 Mask）：_Stencil 不设置，不参与 Stencil 测试
@@ -383,7 +383,7 @@ depth=3 → ref = (1 << 3) - 1 = 7  → 二进制 00000111
 
 子节点测试时通过 `Comp Equal` 检查 Stencil 值是否等于 ref——只有所有外层 Mask 覆盖的区域才满足条件。这也是嵌套 Mask 裁剪区域逐层缩小的本质。
 
-### 17.4.3 Early Stencil Test 的补充说明
+### 18.4.3 Early Stencil Test 的补充说明
 
 关于 Stencil Test 的执行位置：现代 GPU 支持 **Early Stencil Test（早期模板测试）**——在 Fragment Shader 执行之前进行 Stencil 测试。如果测试失败，Fragment Shader 根本不会执行，可节省 GPU 周期。
 
@@ -391,7 +391,7 @@ depth=3 → ref = (1 << 3) - 1 = 7  → 二进制 00000111
 
 ---
 
-## 17.5 自定义 UI Shader 快速参考
+## 18.5 自定义 UI Shader 快速参考
 
 ### 新建自定义 UI Shader 的模板
 
@@ -529,10 +529,10 @@ Fragment Shader 核心：return tex2D(_MainTex, IN.uv) * IN.color;
 
 | 章节 | 内容 | 在本章对应的 Shader 部分 |
 |------|------|------------------------|
-| 第9章 渲染管线 | Canvas.BuildBatch → GPU | Shader 的 Blend + ZWrite Off 决定 UI 如何参与透明队列渲染 |
-| 第13章 Mask 裁剪 | Stencil Buffer 概念、Mask 组件机制 | 17.4 Stencil 在 Shader 中的实现（参数传递方式） |
-| 第15章 Text | TMP 的 SDF 渲染 | TMP 使用 additionalShaderChannels 传递 normal/tangent |
-| 第16章 Mesh 扩展 | ModifyMesh 修改顶点数据 | 修改后的 position/color/uv 在 shader 中体现效果 |
+| 第10章 渲染管线 | Canvas.BuildBatch → GPU | Shader 的 Blend + ZWrite Off 决定 UI 如何参与透明队列渲染 |
+| 第15章 Mask 裁剪 | Stencil Buffer 概念、Mask 组件机制 | 18.4 Stencil 在 Shader 中的实现（参数传递方式） |
+| 第16章 Text | TMP 的 SDF 渲染 | TMP 使用 additionalShaderChannels 传递 normal/tangent |
+| 第17章 Mesh 扩展 | ModifyMesh 修改顶点数据 | 修改后的 position/color/uv 在 shader 中体现效果 |
 
 ---
 
@@ -540,8 +540,8 @@ Fragment Shader 核心：return tex2D(_MainTex, IN.uv) * IN.color;
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |
 |---|---------|---------|---------|---------|
-| 1 | 🟢 轻微 | 17.2.8 | 缺少 `CanUseSpriteAtlas` Tag 会导致"图集合批失效、DrawCall 数量暴增" | 缺少该 Tag 时 SpriteAtlas 打包系统不打包使用该 Shader 的 Sprite，影响的是图集打包阶段而非直接导致运行时 DrawCall 暴增 |
-| 2 | 🟢 轻微 | 17.5.5 | "Stencil Test 发生在 Fragment Shader 之后" | 现代 GPU 支持 Early Stencil Test（Fragment Shader 之前执行），失败则 Fragment Shader 不执行。写入操作（Replace）可能阻止 Early Stencil，但并非"总是在之后" |
-| 3 | 🟢 轻微 | 17.1 / 17.2 | UI Shader 结构（17.1）与 Default UI Shader 解析（17.2）内容高度重复 | 两者在 Transparent Queue、ZWrite Off、Blend、顶点颜色、顶点输入结构、Fragment 核心逻辑上完全重复。17.2 只是用 Default UI Shader 作为示例把 17.1 又讲了一遍 |
-| 4 | 🟢 轻微 | 17.5（Stencil 全节）与第 13 章 | Stencil Buffer 写入/测试/嵌套 Mask/位运算概念 | 内容与第 13 章几乎完全重叠。本章应侧重 Shader 代码层面的 Stencil 参数传递实现 |
-| 5 | 🟢 轻微 | 17.6 全节 | UI vs 3D Shader 差异 11 个小节 | 每个差异点在前文均已隐含说明，属汇总性重复 |
+| 1 | 🟢 轻微 | 18.2.8 | 缺少 `CanUseSpriteAtlas` Tag 会导致"图集合批失效、DrawCall 数量暴增" | 缺少该 Tag 时 SpriteAtlas 打包系统不打包使用该 Shader 的 Sprite，影响的是图集打包阶段而非直接导致运行时 DrawCall 暴增 |
+| 2 | 🟢 轻微 | 18.5.5 | "Stencil Test 发生在 Fragment Shader 之后" | 现代 GPU 支持 Early Stencil Test（Fragment Shader 之前执行），失败则 Fragment Shader 不执行。写入操作（Replace）可能阻止 Early Stencil，但并非"总是在之后" |
+| 3 | 🟢 轻微 | 18.1 / 18.2 | UI Shader 结构（18.1）与 Default UI Shader 解析（18.2）内容高度重复 | 两者在 Transparent Queue、ZWrite Off、Blend、顶点颜色、顶点输入结构、Fragment 核心逻辑上完全重复。18.2 只是用 Default UI Shader 作为示例把 18.1 又讲了一遍 |
+| 4 | 🟢 轻微 | 18.5（Stencil 全节）与第 15 章 | Stencil Buffer 写入/测试/嵌套 Mask/位运算概念 | 内容与第 13 章几乎完全重叠。本章应侧重 Shader 代码层面的 Stencil 参数传递实现 |
+| 5 | 🟢 轻微 | 18.6 全节 | UI vs 3D Shader 差异 11 个小节 | 每个差异点在前文均已隐含说明，属汇总性重复 |

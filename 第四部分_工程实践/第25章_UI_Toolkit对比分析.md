@@ -1,10 +1,10 @@
-# 第28章 UI Toolkit 对比分析
+# 第25章 UI Toolkit 对比分析
 
 > UI Toolkit（原名 UIElements）是 Unity 主推的新 UI 系统，与 UGUI 在架构设计上有根本差异。理解两者的异同，有助于在项目中做正确的技术选型。
 
-## 28.1 架构对比
+## 25.1 架构对比
 
-### 28.1.1 UGUI：GameObject + Component
+### 25.1.1 UGUI：GameObject + Component
 
 UGUI 的每个 UI 元素是一个 GameObject：
 - 继承关系对应 GameObject 层级树
@@ -12,7 +12,7 @@ UGUI 的每个 UI 元素是一个 GameObject：
 - 样式通过 Inspector 参数逐元素设置
 - 事件通过 C# 接口（IPointerClickHandler 等）分发
 
-### 28.1.2 UI Toolkit：Visual Tree + USS + UXML
+### 25.1.2 UI Toolkit：Visual Tree + USS + UXML
 
 UI Toolkit 基于 Web 技术模型：
 - VisualElement 树（轻量级，非 GameObject）
@@ -29,7 +29,7 @@ Canvas                              UIDocument
         └── Text (子对象)               └── VisualElement (容器)
 ```
 
-## 28.2 关键差异
+## 25.2 关键差异
 
 | 维度 | UGUI | UI Toolkit |
 |------|------|-----------|
@@ -46,7 +46,7 @@ Canvas                              UIDocument
 | 运行时 vs 编辑器 | 主要用于运行时 | 编辑器和运行时双用 |
 | 性能 | 大量 GameObject 时开销大 | 轻量级元素，适合大规模 UI |
 
-### 28.2.1 布局系统差异
+### 25.2.1 布局系统差异
 
 ```csharp
 // UGUI：HorizontalLayoutGroup 代码控制
@@ -64,7 +64,7 @@ public class MyLayout : LayoutGroup {
 
 UI Toolkit 的 Flexbox 布局更接近 Web 开发习惯，且支持响应式设计（`@media` 查询）。
 
-### 28.2.2 事件系统差异
+### 25.2.2 事件系统差异
 
 ```
 UGUI 事件流：                    UI Toolkit 事件流：
@@ -76,9 +76,9 @@ EventSystem.Update()             UIDocument 调度
 
 UI Toolkit 的事件冒泡机制比 UGUI 更灵活——父容器可以捕获子元素的事件，适用于通用事件处理。
 
-## 28.3 性能对比
+## 25.3 性能对比
 
-### 28.3.1 元素实例化
+### 25.3.1 元素实例化
 
 | 操作 | UGUI | UI Toolkit |
 |------|------|-----------|
@@ -86,11 +86,11 @@ UI Toolkit 的事件冒泡机制比 UGUI 更灵活——父容器可以捕获子
 | 修改 1000 个元素的颜色 | ~3-5ms（逐个 SetVerticesDirty） | ~1ms（USS 变量更新） |
 | 销毁 1000 个元素 | ~5-10ms（GameObject.Destroy） | <1ms（移除 VisualElement） |
 
-### 28.3.2 渲染性能
+### 25.3.2 渲染性能
 
 UGUI 的优势在于 DrawCall 合批——Canvas.BuildBatch 对多材质批处理有成熟的优化。UI Toolkit 的渲染器在复杂场景下可能产生更多 DrawCall。
 
-## 28.4 如何选择
+## 25.4 如何选择
 
 ### 选 UGUI 的场景
 
@@ -106,7 +106,7 @@ UGUI 的优势在于 DrawCall 合批——Canvas.BuildBatch 对多材质批处�
 - **跨平台运行时 UI**：复杂布局、多分辨率适应
 - **团队有 Web 开发经验**：USS + UXML + C# 的开发模式与前端一致
 
-## 28.5 共存策略
+## 25.5 共存策略
 
 两者可以在同一项目中共存：
 

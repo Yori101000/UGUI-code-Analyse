@@ -1,10 +1,10 @@
-# 第6章 Graphic 系统
+# 第5章 Graphic 系统
 
 > 本章对应原书结构中的第5章（Graphic 系统）。Graphic 是 UGUI 中所有可渲染 UI 组件的抽象基类，理解 Graphic 的设计是理解 UGUI 渲染流程的核心关键。
 
 ---
 
-## 6.1 Graphic 的定位
+## 5.1 Graphic 的定位
 
 在 UGUI 的三层架构（组件层 - 系统层 - 渲染层）中，Graphic 位于**组件层的核心位置**。它既是一个"数据生产者"，负责生成 UI 元素的顶点数据；又是一个"连接器"，连接了 UI 的空间信息（RectTransform）与 GPU 渲染（CanvasRenderer）。
 
@@ -16,9 +16,9 @@
 
 ---
 
-## 6.2 类继承层级
+## 5.2 类继承层级
 
-### 6.2.1 完整层级
+### 5.2.1 完整层级
 
 ```
 UnityEngine.EventSystems.UIBehaviour
@@ -30,7 +30,7 @@ UnityEngine.EventSystems.UIBehaviour
             └── UnityEngine.UI.Text
 ```
 
-### 6.2.2 各层级职责
+### 5.2.2 各层级职责
 
 | 类 | 职责 |
 |------|------|
@@ -41,7 +41,7 @@ UnityEngine.EventSystems.UIBehaviour
 | **RawImage** | 显示不带九宫格裁剪的原始纹理 |
 | **Text** | 逐字符生成 Quad，支持富文本和字体回退 |
 
-### 6.2.3 Graphic 实现的接口
+### 5.2.3 Graphic 实现的接口
 
 Graphic 实现了三个接口，分别对应三类职责：
 
@@ -99,7 +99,7 @@ UIBehaviour             ← 生命周期（Awake / OnEnable / OnDisable）
 
 ---
 
-## 6.3 渲染链路：从 UI 到屏幕像素
+## 5.3 渲染链路：从 UI 到屏幕像素
 
 整个渲染链路由四个环节组成，每一层负责转换一种数据形态：
 
@@ -113,7 +113,7 @@ CanvasRenderer           ← 合批提交（存储本 UI 元素的 Mesh/Material
 GPU                      ← 绘制（Vertex Shader → 光栅化 → Fragment Shader）
 ```
 
-### 6.3.1 RectTransform：空间结构
+### 5.3.1 RectTransform：空间结构
 
 每个 UI 元素都有一个 RectTransform，定义了它在 Canvas 空间中的位置、尺寸、旋转和缩放。Graphic 的 `OnPopulateMesh` 需要读取 `rectTransform.rect` 获取坐标数据。
 
@@ -126,11 +126,11 @@ public Rect rect {
 
 Image 的 Simple 类型会生成一个以 `rectTransform.rect` 为范围的四边形网格（Quad），四个顶点的坐标直接来自 RectTransform 的宽度和高度。
 
-### 6.3.2 Graphic：几何生成
+### 5.3.2 Graphic：几何生成
 
 这是 UGUI 中最关键的一步——**将抽象的"UI 组件"转换为具体的"几何数据"**。这个过程发生在 `OnPopulateMesh` 中，输出是 `VertexHelper`，最终被写入一个 `Mesh`。
 
-### 6.3.3 CanvasRenderer：合批提交
+### 5.3.3 CanvasRenderer：合批提交
 
 每个 Graphic 都对应一个 CanvasRenderer 组件。CanvasRenderer 从 Graphic 接收 Mesh 和 Material，但不立即提交——它会等 Canvas 在 `BuildBatch` 阶段统一合并。
 
@@ -141,7 +141,7 @@ private Material mMaterial;    // 本 UI 元素的材质
 private Texture mTexture;      // 本 UI 元素的纹理
 ```
 
-### 6.3.4 GPU：最终绘制
+### 5.3.4 GPU：最终绘制
 
 Canvas 在 `BuildBatch` 阶段遍历所有 CanvasRenderer，将同材质 + 同纹理 + 同 Stencil 的网格合并为一个 DrawCall，提交给 GPU 绘制。
 
@@ -149,11 +149,11 @@ Canvas 在 `BuildBatch` 阶段遍历所有 CanvasRenderer，将同材质 + 同�
 
 ---
 
-## 6.4 Dirty 标记机制
+## 5.4 Dirty 标记机制
 
 这是 UGUI 性能优化的基石。UI 变化不立即重建，而是通过 **Dirty 标记** 延迟到下一帧统一处理。
 
-### 6.4.1 三种 Dirty
+### 5.4.1 三种 Dirty
 
 Graphic 定义了三种 Dirty 标记，分别对应三种不同的更新需求：
 
@@ -172,7 +172,7 @@ public class Graphic : UIBehaviour, ICanvasElement {
 | **Material Dirty** | `SetMaterialDirty()` | 材质、纹理、Tiling/Offset 变化 | `UpdateMaterial()` → 重新设置材质 |
 | **Layout Dirty** | `SetLayoutDirty()` | 布局属性变化 | 由 LayoutRebuilder 处理，影响 RectTransform |
 
-### 6.4.2 SetVerticesDirty()
+### 5.4.2 SetVerticesDirty()
 
 ```csharp
 public virtual void SetVerticesDirty() {
@@ -194,7 +194,7 @@ public virtual void SetVerticesDirty() {
 3. 将自己注册到 CanvasUpdateRegistry——相当于说"我在下一帧需要重建"
 4. 触发 `m_OnDirtyVertsCallback` 回调（注意：是 Verts 回调，不是 Layout 回调。Text 组件用它注册了字体图集重建监听）
 
-### 6.4.3 SetMaterialDirty()
+### 5.4.3 SetMaterialDirty()
 
 ```csharp
 public virtual void SetMaterialDirty() {
@@ -208,7 +208,7 @@ public virtual void SetMaterialDirty() {
 
 逻辑与 `SetVerticesDirty` 类似，但标记的是材质需要更新。
 
-### 6.4.4 SetLayoutDirty()
+### 5.4.4 SetLayoutDirty()
 
 ```csharp
 // Graphic.cs（实际源码）
@@ -224,7 +224,7 @@ public virtual void SetLayoutDirty() {
 
 核心逻辑：`SetLayoutDirty` 不只是触发回调——它直接调用 `LayoutRebuilder.MarkLayoutForRebuild`，向上查找最近的 LayoutGroup 父级并注册布局重建。当 Text 的文本内容变化导致尺寸改变时，此方法通知父 LayoutGroup 重新排列所有子元素。
 
-### 6.4.5 触发场景
+### 5.4.5 触发场景
 
 以 Image 组件为例，常见的触发场景：
 
@@ -257,11 +257,11 @@ public void SetNativeSize() {
 
 ---
 
-## 6.5 Rebuild 流程详解
+## 5.5 Rebuild 流程详解
 
 这是 Graphic 最核心的流程，也是理解 UGUI 渲染管线的入口。
 
-### 6.5.1 调度机制
+### 5.5.1 调度机制
 
 重建由 `CanvasUpdateRegistry` 在 `PerformUpdate` 中统一触发：
 
@@ -289,7 +289,7 @@ private void PerformUpdate() {
 
 Graphic 的 `Rebuild` 被调用的时机是 `CanvasUpdate.PreRender` 阶段——这个阶段在 Layout 重建完成之后、GPU 绘制之前，确保布局结果已经写入 RectTransform，Graphic 可以读取正确的尺寸生成顶点。
 
-### 6.5.2 Graphic.Rebuild() 源码
+### 5.5.2 Graphic.Rebuild() 源码
 
 ```csharp
 // Graphic.cs
@@ -320,7 +320,7 @@ public virtual void Rebuild(CanvasUpdate update) {
 3. **先 Geometry 再 Material**：因为材质可能依赖于顶点数据（如果子类在顶点中编码了 UV/颜色等需要材质配合的信息）
 4. **重置 Dirty 标记**：处理完后立即重置，避免重复重建
 
-### 6.5.3 UpdateGeometry() — 顶点重建
+### 5.5.3 UpdateGeometry() — 顶点重建
 
 ```csharp
 // Graphic.cs
@@ -357,7 +357,7 @@ private void DoMeshGeneration() {
 - **`SetMesh` 在 `DoMeshGeneration` 内部完成**，`UpdateGeometry` 只是入口
 - 注意：这是较新版本（UGUI 2019+ 包化后）的实现，旧版本（2018 及更早）使用每实例的 `m_WorkerMesh` + 每帧 `new VertexHelper()`，GC 开销更大
 
-### 6.5.4 UpdateMaterial() — 材质更新
+### 5.5.4 UpdateMaterial() — 材质更新
 
 ```csharp
 // Graphic.cs（实际源码）
@@ -394,7 +394,7 @@ public virtual Material materialForRendering {
 
 > 💡 **注意**：`SetMaterial` 和 `SetTexture` 是 CanvasRenderer 的方法，它们只负责将材质/纹理绑定到当前 UI 元素，真正的 DrawCall 合并是在 Canvas 的 `BuildBatch` 阶段发生的。
 
-### 6.5.5 完整重建时序
+### 5.5.5 完整重建时序
 
 ```
 Frame N:
@@ -425,11 +425,11 @@ Frame N (当帧渲染前):
 
 ---
 
-## 6.6 OnPopulateMesh —— 子类重写的入口
+## 5.6 OnPopulateMesh —— 子类重写的入口
 
 `OnPopulateMesh` 是 Graphic 提供给子类的**虚方法**。它是所有 UI 几何数据的来源。
 
-### 6.6.1 方法签名
+### 5.6.1 方法签名
 
 ```csharp
 // Graphic.cs
@@ -451,7 +451,7 @@ protected virtual void OnPopulateMesh(VertexHelper vh) {
 
 默认实现很简单：以 `RectTransform.rect` 为范围，生成一个白色不透明的四边形网格。如果子类不重写 `OnPopulateMesh`，所有的 Graphic 都会显示为一个白色方块——就像在一个空的 Image 组件上不指定 Sprite 时看到的样子。
 
-### 6.6.2 Image 的 OnPopulateMesh 实现
+### 5.6.2 Image 的 OnPopulateMesh 实现
 
 Image 的 `OnPopulateMesh` 根据 `Image.type`（Simple / Sliced / Tiled / Filled）有不同的实现：
 
@@ -526,7 +526,7 @@ private void GenerateSimpleSprite(VertexHelper vh, bool lPreserveAspect) {
 - `Image.OnPopulateMesh` 使用 `GetDrawingDimensions()`（考虑 Sprite 的 Pixels Per Unit）
 - Image 额外计算了 Sprite 的 UV 坐标，不再是简单的 (0,0)-(1,1)
 
-### 6.6.3 Text 的 OnPopulateMesh 实现
+### 5.6.3 Text 的 OnPopulateMesh 实现
 
 Text 的 `OnPopulateMesh` 是最复杂的——它需要将字符串中的每个字符转换为一个 Quad（四个顶点 + 两个三角形）：
 
@@ -554,11 +554,11 @@ Text 的重建有一个额外的影响：当文本内容变化时，除了 `SetV
 
 ---
 
-## 6.7 VertexHelper —— 顶点构建工具类
+## 5.7 VertexHelper —— 顶点构建工具类
 
 `VertexHelper` 是 `OnPopulateMesh` 中使用的核心工具类，它封装了顶点数据的收集过程。
 
-### 6.7.1 VertexHelper 的职责
+### 5.7.1 VertexHelper 的职责
 
 ```
 VertexHelper 的作用：
@@ -584,7 +584,7 @@ public class VertexHelper : IDisposable {
 
 `VertexHelper` 维护了 9 个内部列表，覆盖了 Mesh 需要的全部顶点属性。这些数据最终会被写入到一个 `Mesh` 对象中。
 
-### 6.7.2 核心方法
+### 5.7.2 核心方法
 
 #### AddVert —— 添加一个顶点
 
@@ -660,7 +660,7 @@ public void Clear() {
 
 > ⚠ **勘误 #2**：部分资料将 `Clear()` 描述为"仅重置索引计数器，不清除数据"，这在较新版本的 UGUI 中是不准确的。实际上 `VertexHelper.Clear()` 会清空所有列表——从 2019.x 版本起就是这样实现的。但清空时不会释放容量（`List.Clear()` 不释放 `Capacity`），所以重新添加顶点的过程中不会触发内存分配。
 
-### 6.7.3 一个完整的 Quad 生成示例
+### 5.7.3 一个完整的 Quad 生成示例
 
 ```csharp
 // 手动创建一个覆盖 RectTransform 的 Quad
@@ -690,7 +690,7 @@ void GenerateQuad(VertexHelper vh, Rect rect, Color32 color) {
   四个顶点               两个三角形（6 个索引）
 ```
 
-### 6.7.4 VertexHelper 的 IDisposable
+### 5.7.4 VertexHelper 的 IDisposable
 
 `VertexHelper` 实现了 `IDisposable` 接口。在旧版本 UGUI（2018 及更早）中，`DoMeshGeneration` 通过 `using` 语句确保其被释放：
 
@@ -708,11 +708,11 @@ private void DoMeshGeneration() {
 
 ---
 
-## 6.8 Graphic 与 CanvasRenderer 的关系
+## 5.8 Graphic 与 CanvasRenderer 的关系
 
 Graphic 是 C# 层面的组件，负责生成数据；CanvasRenderer 是引擎 native 层面的"呈现器"，负责存储和提交数据。
 
-### 6.8.1 自动创建
+### 5.8.1 自动创建
 
 Graphic 的 `canvasRenderer` 属性是**惰性加载**的——首次访问时如果不存在则自动创建（不是通过 Awake，而是通过属性 getter）：
 
@@ -731,7 +731,7 @@ public CanvasRenderer canvasRenderer {
 }
 ```
 
-### 6.8.2 数据流向
+### 5.8.2 数据流向
 
 ```
 Graphic（C# 层）
@@ -752,7 +752,7 @@ Canvas.BuildBatch()（引擎 native 方法）
 GPU DrawCall
 ```
 
-### 6.8.3 关键区别
+### 5.8.3 关键区别
 
 | 维度 | Graphic | CanvasRenderer |
 |------|---------|---------------|
@@ -764,7 +764,7 @@ GPU DrawCall
 
 ---
 
-## 6.9 自定义 Graphic 的实践路径
+## 5.9 自定义 Graphic 的实践路径
 
 基于本章的分析，你可以通过继承 `MaskableGraphic` 来创建自定义 UI 组件：
 
@@ -829,7 +829,7 @@ CircleGraphic.SetRadius(100)
 
 ---
 
-## 6.10 本章总结
+## 5.10 本章总结
 
 ### 核心要点
 

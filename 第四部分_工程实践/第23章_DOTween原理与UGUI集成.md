@@ -1,4 +1,4 @@
-# 第26章 DOTween 原理与 UGUI 集成
+# 第23章 DOTween 原理与 UGUI 集成
 
 > 本章讲 DOTween 的**底层机制**——它为什么比手写协程快、对象池怎么工作、Tween 怎么驱动、怎么与 UGUI 生命周期整合。不是 API 手册（官方文档已有）。
 
@@ -20,7 +20,7 @@ DOTween 的核心设计目标就是：**零分配（zero allocation）**。它�
 
 ---
 
-## 26.1 DOTween 的总体架构
+## 23.1 DOTween 的总体架构
 
 ```
 调用方（如 transform.DOMoveX(5, 1)）
@@ -49,9 +49,9 @@ TweenManager.Update（每帧在 DOTween 的全局 Update 中调用）
 
 ---
 
-## 26.2 Tween 的对象池机制
+## 23.2 Tween 的对象池机制
 
-### 26.2.1 为什么需要池
+### 23.2.1 为什么需要池
 
 每次 StartCoroutine 都会产生 GC Alloc（协程实例 + Enumerator）。一个界面同时播放几十个动画，每播放一轮就分配一轮，GC 压力明显。
 
@@ -85,7 +85,7 @@ DOTween 内部 = TweenPool.Get() + 设置参数 + TweenManager.Add()
 
 全程没有 `new Tween()`，没有 `StartCoroutine`。
 
-### 26.2.2 AutoKill 与 SetRecyclable
+### 23.2.2 AutoKill 与 SetRecyclable
 
 ```csharp
 // 默认行为：动画播完自动销毁（回池）
@@ -102,7 +102,7 @@ transform.DOMoveX(5, 1).SetRecyclable(true);
 
 ---
 
-## 26.3 Tween 的驱动方式：委托而非反射
+## 23.3 Tween 的驱动方式：委托而非反射
 
 手写脚本的典型做法：
 
@@ -147,7 +147,7 @@ CanvasGroup.DOFade（极低）< DOScale/DOMove（低）< DOColor（中）< DOTex
 
 ---
 
-## 26.4 Sequence：复杂动画编排
+## 23.4 Sequence：复杂动画编排
 
 Sequence 不是多个 Tween 各跑各的，而是一个**容器 Tween**，内部按时间轴管理子 Tween：
 
@@ -166,13 +166,13 @@ Sequence 内部维护时间轴——子 Tween 的起始时间由它在 Sequence 
 
 ---
 
-## 26.5 DOTween 与 UI 生命周期
+## 23.5 DOTween 与 UI 生命周期
 
-### 26.5.1 目标失效保护
+### 23.5.1 目标失效保护
 
 DOTween 内部在每次更新时会检查 `target` 是否为 null 或 `Equals(null)`（Unity 的伪 null），如果目标已被 Destroy，Tween 自动终止不回抛异常。这是 DOTween 相对手写协程的一个重要优势——手写协程在 target 被销毁后还在试图修改它，会抛 MissingReferenceException。
 
-### 26.5.2 OnComplete 的正确用法
+### 23.5.2 OnComplete 的正确用法
 
 ```csharp
 // 界面关闭：等待退出动画完成再 Destroy
@@ -182,7 +182,7 @@ uiPanel.DOScale(0, 0.3f).OnComplete(() =>
 });
 ```
 
-### 26.5.3 Kill 的时机
+### 23.5.3 Kill 的时机
 
 UI 被隐藏或回收时，应该 Kill 掉还在播放的 Tween，避免下一帧又去修改已经隐藏或复用的 UI：
 
@@ -198,7 +198,7 @@ public override void OnHide()
 
 ---
 
-## 26.6 DOTween 的性能实测
+## 23.6 DOTween 的性能实测
 
 | 场景 | 手写协程 | DOTween |
 |------|---------|---------|
