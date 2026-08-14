@@ -1,6 +1,6 @@
 # 第1章 UGUI 整体架构
 
-> 本章对应原书结构中的第1章（基础理论部分）。UGUI 是 Unity 官方推出的 UI 系统，全称 Unity UI，于 Unity 4.6 引入。这一章只做"热身"：用一页图让你知道 UGUI 整体长什么样、数据怎么流动、本书怎么读。具体机制（重建调度、RectTransform、Graphic、Canvas）从第 2 章起逐层展开。
+> UGUI 是 Unity 官方推出的 UI 系统，全称 Unity UI，于 Unity 4.6 引入。这一章只做"热身"：用一页图让你知道 UGUI 整体长什么样、数据怎么流动、本书怎么读。具体机制（重建调度、RectTransform、Graphic、Canvas）从第 2 章起逐层展开。
 
 ---
 

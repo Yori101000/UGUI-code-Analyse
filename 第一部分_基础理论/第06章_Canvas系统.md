@@ -1,6 +1,6 @@
 # 第6章 Canvas系统
 
-> 本章对应原书结构中的第6章（基础理论部分）。Canvas是UGUI中承上启下的核心组件——所有UI元素必须挂载在Canvas下才能被渲染，它是连接UI数据（Graphic生成的网格）与渲染管线（GPU DrawCall）的核心枢纽。
+> Canvas是UGUI中承上启下的核心组件——所有UI元素必须挂载在Canvas下才能被渲染，它是连接UI数据（Graphic生成的网格）与渲染管线（GPU DrawCall）的核心枢纽。
 
 ---
 

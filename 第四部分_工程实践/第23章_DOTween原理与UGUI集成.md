@@ -117,9 +117,12 @@ void Update()
 DOTween 如果用反射来读写属性，每次 set 都有反射开销。它用的是**预编译的委托**：
 
 ```
-DOFloat(float3.DOScaleX(2, 1)
-  → DOTween 内部注册 getter = () => transform.localScale.x
-                      setter = x => transform.localScale = new Vector3(x, transform.localScale.y, transform.localScale.z)
+transform.DOScaleX(2, 1)
+  → DOTween 内部注册一对委托：
+      getter = () => transform.localScale.x
+      setter = x  => transform.localScale =
+                     new Vector3(x, transform.localScale.y, transform.localScale.z)
+  → 每帧只调用这两个委托，不做反射查找
 ```
 
 在 DOTween 的源代码里，这些 setter/getter 是编译时通过代码生成（DOTween's `Plugins` 系统）预定义的，不是运行时反射。UGUI 相关的扩展（`DOMove`、`DOFade`、`DOAnchorPos` 等）也是同样的机制。
@@ -198,15 +201,18 @@ public override void OnHide()
 
 ---
 
-## 23.6 DOTween 的性能实测
+## 23.6 DOTween 与手写协程的性能特征对比
 
 | 场景 | 手写协程 | DOTween |
 |------|---------|---------|
-| 100 个 UI 同时播放 0.3s 动画 | ~8ms GC Alloc（协程创建）| **~0ms GC Alloc** |
-| 持续 10 分钟反复播放 | GC 频繁，卡顿明显 | 稳定（零分配） |
-| 目标销毁后继续运行 | MissingReferenceException | 自动终止 |
+| 大批 UI 同时播放短动画 | 每个协程都产生托管分配（迭代器对象 + `WaitForSeconds` 等） | 稳态下**接近零分配**——Tween 对象从池里取 |
+| 长时间反复播放 | 分配持续累积，GC 触发频繁 | 分配不随播放次数增长 |
+| 目标被 Destroy 后 | 协程继续执行 → `MissingReferenceException` | 检测到目标失效自动终止 |
+| 属性写入方式 | 直接写字段，无额外开销 | 预注册的 getter/setter 委托，无反射 |
 
-DOTween 的性能优势完全来自**对象池 + 委托 + 全局驱动**这三条，不是"它用了什么黑魔法"。
+> 这里不给具体毫秒数或 KB 数：分配量取决于协程实现方式、动画数量、Unity 版本与 IL2CPP/Mono 后端，脱离这些前提的数字没有参考价值。要评估自己项目的收益，用 Profiler 的 **GC Alloc** 列对比一次即可。
+
+DOTween 的性能优势完全来自**对象池 + 委托 + 全局驱动**这三条，不是"它用了什么黑魔法"。反过来说，如果你的项目里动画数量本来就少，这三条带来的收益也有限。
 
 ---
 
@@ -243,4 +249,6 @@ UGUI 集成要点：
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
-| 1 | 🟢 | 全文 | — | 本章以 DOTween 第三方库为准，无 UGUI 源码级事实声明 |
+| 1 | 🟡 中等 | 23.6 | 小节名为「性能**实测**」，表中「~8ms GC Alloc」用时间单位描述分配量，且无任何测量环境说明 | 单位错误；且无版本/设备/后端前提的数字不具参考价值。已改名为「性能特征对比」并改为定性描述 |
+| 2 | 🟢 轻微 | 23.3 | 示意代码 `DOFloat(float3.DOScaleX(2, 1)` 括号不闭合、语义不明 | 已重写为 `transform.DOScaleX(2, 1)` 的正常形式 |
+| 3 | 🟢 轻微 | 全文 | 其余内容 | 本章以 DOTween 第三方库（Demigiant/DOTween）为准，无 UGUI 源码级事实声明；与 UGUI 的对接点（属性 setter → Dirty → 重建）见第 4/5 章 |

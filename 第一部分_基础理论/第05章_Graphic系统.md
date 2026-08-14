@@ -1,6 +1,6 @@
 # 第5章 Graphic 系统
 
-> 本章对应原书结构中的第5章（Graphic 系统）。Graphic 是 UGUI 中所有可渲染 UI 组件的抽象基类，理解 Graphic 的设计是理解 UGUI 渲染流程的核心关键。
+> Graphic 是 UGUI 中所有可渲染 UI 组件的抽象基类，理解 Graphic 的设计是理解 UGUI 渲染流程的核心关键。
 
 ---
 

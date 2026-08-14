@@ -1,6 +1,6 @@
 # 第7章 CanvasScaler 分辨率适配
 
-> 本章对应原书结构中的第2章（基础理论部分）。CanvasScaler 决定了 UI 在不同屏幕尺寸和分辨率下的缩放行为，是理解 UGUI 多分辨率适配的核心。
+> CanvasScaler 决定了 UI 在不同屏幕尺寸和分辨率下的缩放行为，是理解 UGUI 多分辨率适配的核心。
 
 ---
 
@@ -128,8 +128,18 @@ protected void SetScaleFactor(float factor) {
 
 ```csharp
 protected virtual void HandleConstantPhysicalSize() {
-    float dpi = (Screen.dpi == 0) ? m_FallbackScreenDPI : Screen.dpi;
-    float targetDPI = m_PhysicalUnit 对应的值;
+    float currentDpi = Screen.dpi;
+    float dpi = (currentDpi == 0 ? m_FallbackScreenDPI : currentDpi);
+
+    float targetDPI = 1;
+    switch (m_PhysicalUnit) {
+        case Unit.Centimeters: targetDPI = 2.54f; break;
+        case Unit.Millimeters: targetDPI = 25.4f; break;
+        case Unit.Inches:      targetDPI = 1;     break;
+        case Unit.Points:      targetDPI = 72;    break;
+        case Unit.Picas:       targetDPI = 6;     break;
+    }
+
     SetScaleFactor(dpi / targetDPI);
     SetReferencePixelsPerUnit(m_ReferencePixelsPerUnit * targetDPI / m_DefaultSpriteDPI);
 }
@@ -186,4 +196,8 @@ CanvasScaler.cs → Handle() → HandleScaleWithScreenSize()
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
-| 1 | 🟢 | 全文 | — | 本章无源码级勘误记录；逻辑以 main `Layout/CanvasScaler.cs` 为准 |
+| 1 | 🟢 轻微 | 7.4 | 代码块内混入中文伪代码 `float targetDPI = m_PhysicalUnit 对应的值;` | 已补全为真实的 `switch (m_PhysicalUnit)` 分派，与 main `Layout/CanvasScaler.cs` 的 `HandleConstantPhysicalSize()` 一致 |
+
+**已核查项**（对照 main `Layout/CanvasScaler.cs`）：`OnEnable` 订阅 `Canvas.preWillRenderCanvases`、`Handle()` 按 ScaleMode 分派、三种 ScreenMatchMode 的 min/max/对数混合公式、`SetScaleFactor` 的去重、物理单位到 targetDPI 的映射表。
+
+**未核查项**：`HandleWorldCanvas()` 在 World Space 下的具体行为、编辑器态与运行态的差异。

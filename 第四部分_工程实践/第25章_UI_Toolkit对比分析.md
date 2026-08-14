@@ -80,11 +80,13 @@ UI Toolkit 的事件冒泡机制比 UGUI 更灵活——父容器可以捕获子
 
 ### 25.3.1 元素实例化
 
-| 操作 | UGUI | UI Toolkit |
-|------|------|-----------|
-| 创建 1000 个 Image | ~8-15ms（GameObject 开销） | ~2-5ms（轻量级 VisualElement） |
-| 修改 1000 个元素的颜色 | ~3-5ms（逐个 SetVerticesDirty） | ~1ms（USS 变量更新） |
-| 销毁 1000 个元素 | ~5-10ms（GameObject.Destroy） | <1ms（移除 VisualElement） |
+| 操作 | UGUI | UI Toolkit | 差距来源 |
+|------|------|-----------|------|
+| 批量创建元素 | 较慢 | **明显更快** | UGUI 每个元素是 GameObject（Transform 层级、组件初始化、注册到各种 Registry）；VisualElement 是纯托管对象 |
+| 批量修改外观 | 较慢 | **更快** | UGUI 逐个 `SetVerticesDirty` 触发顶点重建；UI Toolkit 改 USS 属性走自己的脏标记体系 |
+| 批量销毁元素 | 较慢 | **明显更快** | `GameObject.Destroy` 的开销远大于从 Visual Tree 摘掉一个节点 |
+
+> ⚠️ 这里刻意不给具体毫秒数。此类数字高度依赖 Unity 版本、目标设备、Editor 还是 Build、元素结构复杂度，网上流传的对比数据往往缺少这些前提，直接引用容易得出错误结论。**要做选型决策，请在你的目标设备上对你的真实界面做一次实测。** 上表只表达方向性差距。
 
 ### 25.3.2 渲染性能
 
@@ -131,7 +133,8 @@ UIDocument（Panel Settings）
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
-| 1 | 🟢 | 全文 | — | 本章无源码级勘误记录；UI Toolkit 属独立系统 `com.unity.ui`，对比结论以官方文档为准（见 `_阅读指南/源码一致性审计报告.md`） |
+| 1 | 🟡 中等 | 25.3.1 | 给出「创建 1000 个 Image：UGUI ~8-15ms / UI Toolkit ~2-5ms」等精确到毫秒的对比数字，但未说明 Unity 版本、设备、Editor/Build、元素结构等任何测量前提 | 选型章最容易被直接当作决策依据，无前提的数字比不给更危险。已改为方向性对比，并注明需在目标设备实测 |
+| 2 | 🟢 轻微 | 全文 | 其余内容 | UI Toolkit 属独立系统（内置包 `com.unity.ui` / UIElements），不在 uGUI 仓库；对比结论以官方文档为准。本章未做逐条源码核查 |
 
 ### 推荐的源码阅读路径
 

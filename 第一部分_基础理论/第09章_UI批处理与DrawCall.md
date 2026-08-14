@@ -1,6 +1,6 @@
 # 第9章 UI 批处理与 DrawCall
 
-> 本文对应原书结构中的第8章（基础理论部分）。批处理（Batching）是 UGUI 渲染体系中最重要的性能优化机制——它将多个 UI 元素的 Mesh 合并为同一个 DrawCall 提交，大幅减少 GPU 状态切换的开销。
+> 批处理（Batching）是 UGUI 渲染体系中最重要的性能优化机制——它将多个 UI 元素的 Mesh 合并为同一个 DrawCall 提交，大幅减少 GPU 状态切换的开销。
 
 ---
 

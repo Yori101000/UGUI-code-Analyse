@@ -1,6 +1,6 @@
 # 第8章 CanvasRenderer 机制
 
-> 本章对应原书结构中的第7章。CanvasRenderer 是 UGUI 渲染体系中直接被忽视却又最关键的一层——它是连接 C# UI 数据与 Native 渲染引擎的桥梁。理解 CanvasRenderer，才能真正理解 UGUI 的 Mesh 是怎么"送到 GPU 面前"的。
+> CanvasRenderer 是 UGUI 渲染体系中最容易被忽视、却又最关键的一层——它是连接 C# UI 数据与 Native 渲染引擎的桥梁。理解 CanvasRenderer，才能真正理解 UGUI 的 Mesh 是怎么"送到 GPU 面前"的。
 
 ---
 

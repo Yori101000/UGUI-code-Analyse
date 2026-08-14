@@ -1,6 +1,6 @@
 # 第3章 RectTransform 核心机制
 
-> 本章对应原书结构中的第3章。RectTransform 是 UGUI 空间系统的基石，定义了 UI 元素如何在父级 Canvas 中进行定位、对齐和尺寸计算。与普通 Transform 不同，RectTransform 引入了锚点（Anchor）和轴心（Pivot）两大机制，使得 UI 可以以声明式的方式描述"相对父级什么位置、以什么为基准"。
+> RectTransform 是 UGUI 空间系统的基石，定义了 UI 元素如何在父级 Canvas 中进行定位、对齐和尺寸计算。与普通 Transform 不同，RectTransform 引入了锚点（Anchor）和轴心（Pivot）两大机制，使得 UI 可以以声明式的方式描述"相对父级什么位置、以什么为基准"。
 
 ---
 
@@ -389,7 +389,7 @@ RectTransformUtility.ScreenPointToLocalPointInRectangle(
 dragItem.anchoredPosition = localPoint;
 ```
 
-### 6.4 跨 Canvas 空间转换
+### 3.6.4 跨 Canvas 空间转换
 
 当不同 Canvas（如 Overlay + Camera 混合模式）之间需要坐标转换时，RectTransformUtility 通过 Camera 参数来处理：
 
