@@ -701,18 +701,7 @@ CircleGraphic.SetRadius(100)
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-Graphic.cs → SetVerticesDirty / Rebuild / DoMeshGeneration / UpdateGeometry / UpdateMaterial
-MaskableGraphic.cs → GetModifiedMaterial（Stencil 注入）
-Image.cs / RawImage.cs / Text.cs → OnPopulateMesh 三种实现
-VertexModifiers/IMeshModifier.cs → ModifyMesh 链
-```
-
----
-
-## 5.10 本章总结
+## 本章总结
 
 ### 核心要点
 
@@ -756,6 +745,17 @@ VertexModifiers/IMeshModifier.cs → ModifyMesh 链
 
 ---
 
+## 源码阅读路径
+
+```
+Graphic.cs → SetVerticesDirty / Rebuild / DoMeshGeneration / UpdateGeometry / UpdateMaterial
+MaskableGraphic.cs → GetModifiedMaterial（Stencil 注入）
+Image.cs / RawImage.cs / Text.cs → OnPopulateMesh 三种实现
+VertexModifiers/IMeshModifier.cs → ModifyMesh 链
+```
+
+---
+
 ## 勘误汇总
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
@@ -763,3 +763,4 @@ VertexModifiers/IMeshModifier.cs → ModifyMesh 链
 | 1 | 🟡 | 5.5.3 | 旧版本（2018 及更早）每帧 `new VertexHelper()` 的对比描述 | 已按 main 简化：静态共享 `s_VertexHelper`（`Allocator.Domain`）+ `workerMesh`，细节见第 2 章 2.4~2.7 |
 | 2 | 🟡 | 5.7 | VertexHelper 内部结构与 `Clear()` 语义 | 已与第 2 章对齐：NativeArray 单流存储、`Clear()` 只重置计数（见 2.4 / 2.7.2） |
 | 3 | 🟡 | 5.5.3 | `private void UpdateGeometry()` | main 为 `protected virtual void UpdateGeometry()`——访问级别影响"自定义 Graphic 能否重写它"，而 5.9 正是在教自定义 Graphic。另含已废弃的 `useLegacyMeshGeneration` 分支 |
+

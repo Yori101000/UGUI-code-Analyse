@@ -354,17 +354,7 @@ DrawCall 降低到极致（追求 0~1 个 DrawCall）不一定是最优解。不
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-合批规则在引擎 Native 层（Canvas.BuildBatch），C# 侧无源码；
-UI 侧对照：Graphic.materialForRendering / GetModifiedMaterial、StencilMaterial.cs、Mask.cs、RectMask2D.cs。
-验证工具：Frame Debugger 逐 DrawCall 查看断批原因。
-```
-
----
-
-## 9.9 本章总结
+## 本章总结
 
 ### 核心要点
 
@@ -393,9 +383,20 @@ UI 侧对照：Graphic.materialForRendering / GetModifiedMaterial、StencilMater
 
 ---
 
+## 源码阅读路径
+
+```
+合批规则在引擎 Native 层（Canvas.BuildBatch），C# 侧无源码；
+UI 侧对照：Graphic.materialForRendering / GetModifiedMaterial、StencilMaterial.cs、Mask.cs、RectMask2D.cs。
+验证工具：Frame Debugger 逐 DrawCall 查看断批原因。
+```
+
+---
+
 ## 勘误汇总（对照 uGUI main 与官方文档）
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
 | 1 | 🔴 | 9.3.5 | UGUI 通过 `Graphic.GetModifiedMesh()` 计算需要哪些顶点通道 | main 中不存在该方法；顶点布局由 `Canvas.additionalShaderChannels` 统一声明，`VertexHelper.FillMesh` 固定按 9 通道写入 |
 | 2 | 🔴 | 9.4.4 | 「RectMask2D 通过**修改顶点位置**实现裁剪」 | 不改顶点：`SetClipRect()` → `canvasRenderer.EnableRectClipping()`，GPU 侧由 `UNITY_UI_CLIP_RECT` + `_ClipRect` 在片元阶段裁剪；完全在区外的元素走 `Cull()` 置 `canvasRenderer.cull`。断批结论本身正确，仅机制描述有误。全书统一口径见第 15 章 |
+

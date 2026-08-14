@@ -175,7 +175,7 @@ com.unity.ugui/（GitHub: Unity-Technologies/uGUI, main 分支）
 
 ---
 
-## 1.9 本章总结
+## 本章总结
 
 1. **UGUI 是保留模式的运行时 UI**：状态变化才更新，不做每帧重绘。
 2. **五条设计取舍**：保留模式、组件化、延迟重建、CPU 生成 Mesh、自动合批。
@@ -186,7 +186,7 @@ com.unity.ugui/（GitHub: Unity-Technologies/uGUI, main 分支）
 
 ---
 
-## 1.10 推荐的源码阅读路径
+## 源码阅读路径
 
 ```
 打开 Graphic.cs → 依次阅读：
@@ -199,9 +199,10 @@ com.unity.ugui/（GitHub: Unity-Technologies/uGUI, main 分支）
 
 ---
 
-## 1.11 勘误汇总（对照 uGUI main）
+## 勘误汇总（对照 uGUI main）
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
 | 1 | 🟡 | 1.8 | `Canvas`、`CanvasRenderer`、`RectTransform` 均位于 `UnityEngine.CoreModule` | `Canvas`/`CanvasRenderer` 属 `UnityEngine.UIModule`，仅 `RectTransform` 在 `UnityEngine.CoreModule` |
 | 2 | 🟡 | 1.8 | `VertexHelper.cs` 直接位于 `UI/Core/` | main 中位于 `UI/Core/Utility/` |
+

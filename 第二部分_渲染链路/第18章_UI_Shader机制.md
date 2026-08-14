@@ -577,16 +577,6 @@ fixed4 frag(v2f IN) : SV_Target
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-UI-Default.shader（引擎内置：Data/Resources/BuiltinShaders/）
-Stencil 注入来源：Mask.cs + StencilMaterial.cs
-顶点通道：VertexHelper.FillMesh 的 9 通道布局（第 2 章 2.4）
-```
-
----
-
 ## 本章总结
 
 ```
@@ -619,6 +609,16 @@ Fragment Shader 核心：return tex2D(_MainTex, IN.uv) * IN.color;
 
 ---
 
+## 源码阅读路径
+
+```
+UI-Default.shader（引擎内置：Data/Resources/BuiltinShaders/）
+Stencil 注入来源：Mask.cs + StencilMaterial.cs
+顶点通道：VertexHelper.FillMesh 的 9 通道布局（第 2 章 2.4）
+```
+
+---
+
 ## 勘误汇总
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |
@@ -631,3 +631,4 @@ Fragment Shader 核心：return tex2D(_MainTex, IN.uv) * IN.color;
 | 6 | 🔴 严重 | 18.1 | 号称「直接看**完整代码**逐行拆解」，但缺 `_ClipRect`、`_TextureSampleAdd`、`_ColorMask`、`_UseUIAlphaClip` 四个属性，缺 `UNITY_UI_CLIP_RECT` / `UNITY_UI_ALPHACLIP` 两个关键字，缺 `worldPosition` 插值量与片元里的裁剪分支 | **缺掉的正好是 RectMask2D 的实现机制**，这也是全书对 RectMask2D 说法混乱的源头之一。已补全并新增 ⑪⑫⑬ 三段解析 |
 | 7 | 🟡 中等 | 18.1 / 18.5 及第 19 章全部 Shader | 只 `#include "UnityUI.cginc"`，却使用 `UnityObjectToClipPos` / `TRANSFORM_TEX` / `appdata_base` | 这些来自 `UnityCG.cginc`，缺它**无法编译**。引擎内置 `UI-Default.shader` 两个都 include，已统一补上 |
 | 8 | 🟡 中等 | 18.2 | `FillMesh` 链路写作 `Mesh.vertices = ... / colors32 = ... / uv = ...` 逐通道赋值 | main 为 `SetVertexBufferParams`（9 通道）+ 单次 `SetVertexBufferData` 单流上传，与第 2 章 2.7.5 对齐 |
+

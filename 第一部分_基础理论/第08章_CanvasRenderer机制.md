@@ -426,7 +426,7 @@ Graphic 持有 CanvasRenderer 的引用，但 CanvasRenderer 不持有 Graphic �
 
 ---
 
-## 8.9 本章总结
+## 本章总结
 
 1. **三层职责模型**：Graphic（数据生成）→ Canvas（调度批处理）→ CanvasRenderer（数据存储）
 
@@ -440,7 +440,9 @@ Graphic 持有 CanvasRenderer 的引用，但 CanvasRenderer 不持有 Graphic �
 
 6. **每个渲染 UI 元素一个 CanvasRenderer**：Image、Text、RawImage 等所有可视组件都依赖 CanvasRenderer 来存储和传递它们的渲染数据
 
-### 推荐的源码阅读路径
+---
+
+## 源码阅读路径
 
 ```
 打开 CanvasRenderer API 文档 → 重点阅读：
@@ -467,3 +469,4 @@ Graphic 持有 CanvasRenderer 的引用，但 CanvasRenderer 不持有 Graphic �
 | 5 | 🟡 | 8.3.4 / 8.7 | 生命周期表与创建阶段仍写「Awake → `GetComponent<CanvasRenderer>()` 建立引用」 | 与 8.3.3 及 main 一致：惰性 `canvasRenderer` 属性，首次访问时才 `GetComponent`/`AddComponent`。此处是勘误 #3 修正时的遗漏 |
 | 6 | 🟡 | 8.4.4 | `cull` / `absoluteDepth` / `materialCount` 等属性「完全由 C# 管理，不涉及 Native 同步」 | 均为引擎侧属性，C# 只是读写入口，真实状态在 Native 侧——与 8.4.2 的结论一致 |
 | 7 | 🔴 | 8.5.2 | RectMask2D「**不断批**——这是它的核心性能优势」 | 不创建材质实例 ≠ 不断批。裁剪矩形与 `UNITY_UI_CLIP_RECT` 关键字本身是渲染状态：同一裁剪矩形内可合批，不同 RectMask2D 之间断批（行为推断，Frame Debugger 显示 `Different RectMask2D`）。全书统一口径见第 15 章 |
+

@@ -702,16 +702,6 @@ public enum AdditionalCanvasShaderChannels
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-Canvas 是引擎内置类型（UIModule），看官方文档；
-uGUI 侧：Layout/CanvasScaler.cs（分辨率适配）、UI/Core/GraphicRaycaster.cs（Canvas 相关射线检测）、
-CanvasUpdateRegistry.cs（订阅 Canvas.willRenderCanvases）。
-```
-
----
-
 ## 本章总结
 
 ### Canvas的核心地位
@@ -747,6 +737,16 @@ Canvas不是"UI组件的容器"这么简单——它是UGUI中**唯一具备渲�
 
 ---
 
+## 源码阅读路径
+
+```
+Canvas 是引擎内置类型（UIModule），看官方文档；
+uGUI 侧：Layout/CanvasScaler.cs（分辨率适配）、UI/Core/GraphicRaycaster.cs（Canvas 相关射线检测）、
+CanvasUpdateRegistry.cs（订阅 Canvas.willRenderCanvases）。
+```
+
+---
+
 ## 勘误汇总（对照官方文档）
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
@@ -755,3 +755,4 @@ Canvas不是"UI组件的容器"这么简单——它是UGUI中**唯一具备渲�
 | 2 | 🟡 中等 | 6.6.1 | `public static event Action<float> willRenderCanvases;` | 委托无参（`public delegate void WillRenderCanvases();`）。第 4 章 4.2.1（`+= PerformUpdate`）与第 21 章 21.4.1（`+= OnWillRenderCanvases`）的无参用法才是正确的 |
 | 3 | 🟢 轻微 | 6.4.1 | `public int cached SortingLayerValue;` | 标识符中间多了空格，非法 C#；正确为 `cachedSortingLayerValue`（6.6.1 处写法无误） |
 | 4 | 🟢 轻微 | 6.9.3 | 带宽表给出 None=32B / +TexCoord1=48B / +TexCoord2=64B 等绝对字节数 | 未说明计算口径（分量数、对齐方式），且与 position(12)+color(4)+uv0(8)=24B 对不上。已改为相对量级，精确值以 Frame Debugger 的 Vertex Buffer 为准 |
+

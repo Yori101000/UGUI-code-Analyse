@@ -129,6 +129,16 @@ UIDocument（Panel Settings）
 
 ---
 
+## 源码阅读路径
+
+```
+UI Toolkit 不是 uGUI：源码在引擎内置包 com.unity.ui（UnityCsReference/UIElements）。
+对照阅读：VisualElement vs RectTransform+Graphic、PanelSettings/UIDocument vs Canvas、
+EventDispatcher vs EventSystem、Flexbox vs LayoutGroup。
+```
+
+---
+
 ## 勘误汇总
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
@@ -136,10 +146,3 @@ UIDocument（Panel Settings）
 | 1 | 🟡 中等 | 25.3.1 | 给出「创建 1000 个 Image：UGUI ~8-15ms / UI Toolkit ~2-5ms」等精确到毫秒的对比数字，但未说明 Unity 版本、设备、Editor/Build、元素结构等任何测量前提 | 选型章最容易被直接当作决策依据，无前提的数字比不给更危险。已改为方向性对比，并注明需在目标设备实测 |
 | 2 | 🟢 轻微 | 全文 | 其余内容 | UI Toolkit 属独立系统（内置包 `com.unity.ui` / UIElements），不在 uGUI 仓库；对比结论以官方文档为准。本章未做逐条源码核查 |
 
-### 推荐的源码阅读路径
-
-```
-UI Toolkit 不是 uGUI：源码在引擎内置包 com.unity.ui（UnityCsReference/UIElements）。
-对照阅读：VisualElement vs RectTransform+Graphic、PanelSettings/UIDocument vs Canvas、
-EventDispatcher vs EventSystem、Flexbox vs LayoutGroup。
-```

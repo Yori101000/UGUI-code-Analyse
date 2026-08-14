@@ -201,3 +201,4 @@ CanvasScaler.cs → Handle() → HandleScaleWithScreenSize()
 **已核查项**（对照 main `Layout/CanvasScaler.cs`）：`OnEnable` 订阅 `Canvas.preWillRenderCanvases`、`Handle()` 按 ScaleMode 分派、三种 ScreenMatchMode 的 min/max/对数混合公式、`SetScaleFactor` 的去重、物理单位到 targetDPI 的映射表。
 
 **未核查项**：`HandleWorldCanvas()` 在 World Space 下的具体行为、编辑器态与运行态的差异。
+

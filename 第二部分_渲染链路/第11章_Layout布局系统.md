@@ -665,3 +665,4 @@ ScrollRect（视图窗口：Content 位移 + Viewport 裁剪）
 | 4 | 🟢 轻微 | 11.2.3 | "内部通常会维护一个 rectChildren 列表" | rectChildren 是 LayoutGroup 的 protected 属性，通过 `GetRectChildren()` 每帧刷新，用"通常会维护"描述过于模糊 |
 | 5 | 🟡 中等 | 11.6.4 | 环形布局代码中 `SetChildAlongAxis` 直接使用 `x` 和 `-y` 作为位置 | 三角函数算出的坐标相对于父容器中心，而 `SetChildAlongAxis` 的 `pos` 参数相对于父容器左/上边界，缺失 `centerX`/`centerY` 偏移，导致圆环定位到容器左上角附近 |
 | 6 | 🟡 中等 | 11.6.4 | `SetLayoutHorizontal()` 和 `SetLayoutVertical()` 都调用同一个 `ArrangeChildren()` 全量计算 | LayoutRebuilder 分两轮先后调用这两个方法，每次全量计算意味着每帧多算了一遍；应将水平和垂直计算分别放入各自方法中，复用已计算的公共数据（角度、圆心坐标等） |
+

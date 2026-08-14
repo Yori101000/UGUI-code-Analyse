@@ -216,15 +216,6 @@ DOTween 的性能优势完全来自**对象池 + 委托 + 全局驱动**这三�
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-DOTween 是第三方库（Demigiant/DOTween），无 UGUI 源码；
-对接点：Tween 修改属性 → 属性 setter 触发 SetVerticesDirty → CanvasUpdateRegistry 重建（第 4/5 章）。
-```
-
----
-
 ## 本章总结
 
 ```
@@ -245,6 +236,15 @@ UGUI 集成要点：
 
 ---
 
+## 源码阅读路径
+
+```
+DOTween 是第三方库（Demigiant/DOTween），无 UGUI 源码；
+对接点：Tween 修改属性 → 属性 setter 触发 SetVerticesDirty → CanvasUpdateRegistry 重建（第 4/5 章）。
+```
+
+---
+
 ## 勘误汇总
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
@@ -252,3 +252,4 @@ UGUI 集成要点：
 | 1 | 🟡 中等 | 23.6 | 小节名为「性能**实测**」，表中「~8ms GC Alloc」用时间单位描述分配量，且无任何测量环境说明 | 单位错误；且无版本/设备/后端前提的数字不具参考价值。已改名为「性能特征对比」并改为定性描述 |
 | 2 | 🟢 轻微 | 23.3 | 示意代码 `DOFloat(float3.DOScaleX(2, 1)` 括号不闭合、语义不明 | 已重写为 `transform.DOScaleX(2, 1)` 的正常形式 |
 | 3 | 🟢 轻微 | 全文 | 其余内容 | 本章以 DOTween 第三方库（Demigiant/DOTween）为准，无 UGUI 源码级事实声明；与 UGUI 的对接点（属性 setter → Dirty → 重建）见第 4/5 章 |
+

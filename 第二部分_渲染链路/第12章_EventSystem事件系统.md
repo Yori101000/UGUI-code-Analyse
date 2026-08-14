@@ -532,17 +532,6 @@ Device Layer（鼠标/键盘/手柄/触摸）
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-EventSystem/EventSystem.cs → Update / RaycastAll
-EventSystem/InputModules/BaseInputModule.cs、StandaloneInputModule.cs → Process()
-UI/Core/GraphicRaycaster.cs → Raycast()
-EventSystem/ExecuteEvents.cs → Execute / GetEventHandler
-```
-
----
-
 ## 本章总结
 
 EventSystem 是 UGUI 的"输入中间层"——将多设备输入统一为 PointerEventData，通过 Raycaster 体系完成命中检测，再用 ExecuteEvents 分发给实现了特定接口的 UI 组件。
@@ -559,6 +548,17 @@ EventSystem 是 UGUI 的"输入中间层"——将多设备输入统一为 Point
 
 ---
 
+## 源码阅读路径
+
+```
+EventSystem/EventSystem.cs → Update / RaycastAll
+EventSystem/InputModules/BaseInputModule.cs、StandaloneInputModule.cs → Process()
+UI/Core/GraphicRaycaster.cs → Raycast()
+EventSystem/ExecuteEvents.cs → Execute / GetEventHandler
+```
+
+---
+
 ## 勘误汇总
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |
@@ -568,3 +568,4 @@ EventSystem 是 UGUI 的"输入中间层"——将多设备输入统一为 Point
 | 3 | 🟢 轻微 | 12.3.11 / 12.2.9 | 只给出 `IsPointerOverGameObject()` 无参用法 | 无参版本仅检测 PointerId=-1（鼠标左键），移动端/多键场景需传 pointerId |
 | 4 | 🟢 轻微 | 12.7.1 / 12.7.13 | 旧系统"轮询" vs 新系统"事件驱动"的二分对立 | 旧系统同样只在 Process() 中按需读取；差异在抽象层级，非运行模式二分 |
 | 5 | 🟢 轻微 | 12.2.3 | 继承结构写为 PhysicsRaycaster 和 Physics2DRaycaster 平级 | Physics2DRaycaster 继承自 PhysicsRaycaster，非直接继承 BaseRaycaster |
+

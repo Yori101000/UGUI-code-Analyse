@@ -333,7 +333,7 @@ UI Mesh 扩展机制本质上是一条**可编程几何流水线**。它让 UGUI
 
 ---
 
-### 推荐的源码阅读路径
+## 源码阅读路径
 
 ```
 IMeshModifier.cs → BaseMeshEffect.cs → Shadow.cs → Outline.cs → PositionAsUV1.cs
@@ -356,3 +356,4 @@ IMeshModifier.cs → BaseMeshEffect.cs → Shadow.cs → Outline.cs → Position
 | 8 | 🟡 中等 | 17.1.3 / 17.3.3 | 优化方案为缓存成员 `List<UIVertex>` | main 官方写法是 `ListPool<UIVertex>.Get()/Release()`（Shadow/Outline 即如此），成员字段缓存只是替代方案 |
 | 9 | 🟢 轻微 | 17.2.2 表格 | 1000 字 + Outline + Shadow = **28000** 顶点 | 按本章 17.2.3③ 自述的乘法规则，两种叠加顺序都得 **40000**（4000 ×2 ×5）；第 20 章 20.4 给的也是 40000。28000 无法由文中任何规则推出，已更正 |
 | 10 | 🟢 轻微 | 17.2.2 代码 | Outline 示例使用了从未声明的 `startIndex` | 已改为显式维护 `start` / `end` 的写法，并说明为什么每轮要推进起点（避免复制到自己刚追加的顶点） |
+

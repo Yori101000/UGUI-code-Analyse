@@ -436,16 +436,7 @@ dragItem.anchoredPosition = localPoint;
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-RectTransform / RectTransformUtility 是引擎内置类型（官方文档），uGUI 仓库内无 C# 实现。
-阅读方式：官方文档 API → 在 uGUI 仓库搜索 `RectTransformUtility.`（GraphicRaycaster.cs、Scrollbar.cs 等）看真实调用。
-```
-
----
-
-## 总结
+## 本章总结
 
 RectTransform 是 UGUI 整个布局和渲染系统的空间基础：
 
@@ -460,6 +451,15 @@ RectTransform 是 UGUI 整个布局和渲染系统的空间基础：
 
 ---
 
+## 源码阅读路径
+
+```
+RectTransform / RectTransformUtility 是引擎内置类型（官方文档），uGUI 仓库内无 C# 实现。
+阅读方式：官方文档 API → 在 uGUI 仓库搜索 `RectTransformUtility.`（GraphicRaycaster.cs、Scrollbar.cs 等）看真实调用。
+```
+
+---
+
 ## 勘误汇总（对照 uGUI main 与官方文档）
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
@@ -467,3 +467,4 @@ RectTransform 是 UGUI 整个布局和渲染系统的空间基础：
 | 1 | 🔴 | 3.6 | `RectTransformUtility` 是 UGUI 源码中的静态工具类文件（位于 `UnityEngine.UI/UI/Core/`） | 引擎内置类型（`UnityEngine.UIModule`），不在 uGUI 仓库；uGUI 只是调用方 |
 | 2 | 🔴 | 3.6.2 | 存在 `WorldToPointInRectangle(RectTransform, Vector2, out Vector2)` 方法 | 官方 API 中不存在该方法；世界→屏幕应使用 `WorldToScreenPoint`，另有 `ScreenPointToRay` 等 |
 | 3 | 🟢 | 3.6.1 | `PixelAdjustPoint()` / `PixelAdjustRect()` 是"核心私有方法" | 均为 `public static`，非私有 |
+

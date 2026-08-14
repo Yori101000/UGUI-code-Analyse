@@ -470,17 +470,6 @@ PC 编辑器 GPU 性能充足 → Stencil Mask 开销几乎无感 → 容易误�
 
 ---
 
-### 推荐的源码阅读路径
-
-```
-Mask.cs → GetModifiedMaterial（Stencil）
-StencilMaterial.cs → Add（按参数缓存材质副本）
-RectMask2D.cs → EnableRectClipping
-Culling/ClipperRegistry.cs → Cull()；IClippable / IClipper
-```
-
----
-
 ## 本章总结
 
 ```
@@ -506,6 +495,17 @@ Mask 系统
 
 ---
 
+## 源码阅读路径
+
+```
+Mask.cs → GetModifiedMaterial（Stencil）
+StencilMaterial.cs → Add（按参数缓存材质副本）
+RectMask2D.cs → EnableRectClipping
+Culling/ClipperRegistry.cs → Cull()；IClippable / IClipper
+```
+
+---
+
 ## 勘误汇总
 
 | # | 严重程度 | 原文章节 | 原文声称 | 实际情况 |
@@ -521,3 +521,4 @@ Mask 系统
 | 9 | 🔴 严重 | 15.2.1③ / 15.3.3 | RectMask2D 的 GPU 裁剪"通常映射为硬件 Scissor Test（裁剪测试）""极低（硬件 Scissor Test，固定功能管线）" | 不是硬件 Scissor。裁剪在**片元着色器内部**完成：引擎写入材质的 `_ClipRect` 并开启 `UNITY_UI_CLIP_RECT` 关键字，着色器执行 `color.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect)`。依据引擎内置 `UI-Default.shader` |
 | 10 | 🔴 严重 | 15.2.3 / 15.3.2 / 概述表 / 本章总结 | RectMask2D「通常不断批」「RectMask2D 内和外的 Graphic 可以合批」 | 不创建材质实例 ≠ 不断批。裁剪矩形与关键字开关本身是渲染状态：**同一 RectMask2D 下可合批，跨 RectMask2D 断批**（行为推断，Frame Debugger 显示 `Different RectMask2D`）。第 09 章 9.4.4 / 第 20 章 20.1 的断批结论才是正确的一方 |
 | 11 | 🟡 中等 | 15.3.3 | 「被裁剪的像素仍然执行片元着色器，裁剪（Stencil 或 Scissor）发生在着色器之后」 | 对 RectMask2D 成立（裁剪就写在着色器里），对 Mask 不成立：Stencil 测试是否 Early 取决于 GPU 与配置，不能一概而论（见第 18 章 18.4.3）。结论「都不减少 Overdraw」不变，但理由需分开说 |
+
