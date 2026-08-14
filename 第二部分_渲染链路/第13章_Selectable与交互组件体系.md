@@ -27,14 +27,31 @@ UIBehaviour
 
 ### 13.1.1 SelectionState 枚举
 
-Selectable 定义了四种状态：
+Selectable 定义了**五种**状态：
+
+```csharp
+// Selectable.cs（main）
+protected enum SelectionState
+{
+    Normal,
+    Highlighted,
+    Pressed,
+    Selected,
+    Disabled,
+}
+```
 
 | 状态 | 触发条件 |
 |------|---------|
 | **Normal** | 无任何交互 |
-| **Highlighted** | 鼠标悬停，或通过键盘导航选中但未按下 |
+| **Highlighted** | 鼠标悬停在区域内 |
 | **Pressed** | 鼠标按下 |
-| **Disabled** | `interactable = false`，或父级 CanvasGroup 被禁用 |
+| **Selected** | 被 EventSystem 选中（键盘/手柄导航焦点、或代码 `EventSystem.SetSelectedGameObject`） |
+| **Disabled** | `interactable = false`，或父级 CanvasGroup 禁用交互 |
+
+> ⚠️ **Selected 是独立状态，不是 Highlighted 的别名。** `ColorBlock` 里有独立的 `selectedColor`、`SpriteState` 里有独立的 `selectedSprite`、Animation 模式有独立的 `Selected` 触发器，三者都可以单独配置。
+>
+> 容易被误判成"没有区别"是因为**默认值撞车**：`defaultColorBlock` 里 `highlightedColor` 和 `selectedColor` 都是 `(245,245,245,255)`。默认长得一样，不代表是同一个状态——把 `selectedColor` 改成别的颜色，手柄导航焦点和鼠标悬停立刻能区分开。这对做手柄/键盘导航的项目是必需的。
 
 ### 13.1.2 状态评估逻辑
 
@@ -46,40 +63,56 @@ bool isPointerDown;    // 鼠标是否按下
 bool hasSelection;     // 是否被 EventSystem 选中
 ```
 
-状态的判定顺序（在 `UpdateSelectionState()` 中实现）：
+判定写在 `currentSelectionState` **属性**里（不是某个 `UpdateSelectionState()` 方法），顺序是：
 
 ```csharp
-if (!IsInteractable())               → Disabled
-else if (isPointerDown)              → Pressed
-else if (hasSelection)               → Highlighted（选中状态复用 Highlighted 的值）
-else if (isPointerInside)            → Highlighted
-else                                 → Normal
+// Selectable.cs（main，currentSelectionState 的判定顺序）
+if (!IsInteractable())      → SelectionState.Disabled
+else if (isPointerDown)     → SelectionState.Pressed
+else if (hasSelection)      → SelectionState.Selected     ← 独立分支
+else if (isPointerInside)   → SelectionState.Highlighted
+else                        → SelectionState.Normal
 ```
 
-注意：**Selected（选中）和 Highlighted（悬停）在视觉上使用相同的状态值**，两者没有视觉区别。
+**顺序即优先级**：按下 > 选中 > 悬停。所以一个已获得导航焦点的按钮，鼠标移上去仍显示 Selected 而非 Highlighted——因为 `hasSelection` 的判断在前。
 
 ### 13.1.3 DoStateTransition——视觉过渡的执行
 
 当状态发生变化时，`DoStateTransition(SelectionState state, bool instant)` 被调用：
 
 ```csharp
+// Selectable.cs（main，简化：省略了 gameObject.activeInHierarchy 判断等细节）
 protected virtual void DoStateTransition(SelectionState state, bool instant) {
-    // 根据状态查表获取颜色/Sprite/动画触发器
+    // ① 按状态取出三套资源（五个分支，与 SelectionState 一一对应）
+    Color tintColor;  Sprite transitionSprite;  string triggerName;
     switch (state) {
-        case Normal:      颜色=normalColor,        Sprite=null,        触发器="Normal";       break;
-        case Highlighted: 颜色=highlightedColor,   Sprite=highlighted, 触发器="Highlighted"; break;
-        case Pressed:     颜色=pressedColor,        Sprite=pressed,     触发器="Pressed";     break;
-        case Disabled:    颜色=disabledColor,       Sprite=disabled,    触发器="Disabled";    break;
+        case SelectionState.Normal:
+            tintColor = colors.normalColor;      transitionSprite = null;
+            triggerName = animationTriggers.normalTrigger;      break;
+        case SelectionState.Highlighted:
+            tintColor = colors.highlightedColor; transitionSprite = spriteState.highlightedSprite;
+            triggerName = animationTriggers.highlightedTrigger; break;
+        case SelectionState.Pressed:
+            tintColor = colors.pressedColor;     transitionSprite = spriteState.pressedSprite;
+            triggerName = animationTriggers.pressedTrigger;     break;
+        case SelectionState.Selected:            // ← 独立分支，有自己的颜色/图片/触发器
+            tintColor = colors.selectedColor;    transitionSprite = spriteState.selectedSprite;
+            triggerName = animationTriggers.selectedTrigger;    break;
+        case SelectionState.Disabled:
+            tintColor = colors.disabledColor;    transitionSprite = spriteState.disabledSprite;
+            triggerName = animationTriggers.disabledTrigger;    break;
     }
 
-    // 根据 Transition 类型执行视觉变化
+    // ② 按 Transition 类型执行视觉变化
     switch (m_Transition) {
-        case Transition.ColorTint:  StartColorTween(color, instant);    break;
-        case Transition.SpriteSwap: DoSpriteSwap(sprite);              break;
-        case Transition.Animation:  TriggerAnimation(triggerName);     break;
+        case Transition.ColorTint:  StartColorTween(tintColor * colors.colorMultiplier, instant); break;
+        case Transition.SpriteSwap: DoSpriteSwap(transitionSprite);                               break;
+        case Transition.Animation:  TriggerAnimation(triggerName);                                break;
     }
 }
 ```
+
+注意 ColorTint 分支里的 `colors.colorMultiplier`（取值 1~5）：它会把颜色整体放大，用于做超出 1.0 的高亮效果——这也是 `ColorBlock` 里除五种颜色外的两个额外字段之一（另一个是 `fadeDuration`）。
 
 SubClass 可以重写此方法，在保持基类状态管理的基础上叠加自定义效果。
 
@@ -152,33 +185,36 @@ Selectable 实现了 `IMoveHandler`，通过方向键/手柄摇杆在 UI 元素�
 
 ### 自动搜索算法
 
-`FindSelectable(Vector3 dir)` 在 Automatic 模式下被调用，核心逻辑：
+`FindSelectable(Vector3 dir)` 在 Automatic 模式下被调用。它的骨架是"遍历全部 Selectable → 过滤 → 打分 → 取最高分"：
 
 ```csharp
+// 结构示意，非逐行照抄——真实实现的打分细节比这里复杂
 public virtual Selectable FindSelectable(Vector3 dir) {
-    dir = transform.rotation * dir;  // 考虑旋转
-    Vector3 localPos = transform.position;
+    dir = dir.normalized;
     Selectable bestPick = null;
     float bestScore = float.MinValue;
 
-    for (int i = 0; i < s_List.Count; ++i) {  // 遍历场景中所有 Selectable
-        Selectable sel = s_List[i];
-        if (sel == this || !sel.IsInteractable() || sel.navigation.mode == Mode.None)
-            continue;
+    for (int i = 0; i < s_SelectableCount; ++i) {   // 遍历静态数组，不是 List
+        Selectable sel = s_Selectables[i];
+        if (sel == this || sel == null) continue;
+        if (!sel.IsInteractable() || sel.navigation.mode == Navigation.Mode.None) continue;
 
-        Vector3 toTarget = sel.transform.position - localPos;
-        float dot = Vector3.Dot(dir, toTarget.normalized);
-        if (dot <= 0) continue;  // 不在目标方向
-
-        // 计分：方向对齐度 / 距离——优先选"正方向且最近"的
-        float score = dot / toTarget.sqrMagnitude;
+        // 用目标的 RectTransform 边界而非单纯的 transform.position 参与计算，
+        // 并综合"方向对齐度"与"距离"给出得分
+        float score = /* 方向与距离的综合评分 */;
         if (score > bestScore) { bestScore = score; bestPick = sel; }
     }
     return bestPick;
 }
 ```
 
-**行为本质**：从当前控件中心向外膨胀，直到接触到最近的符合条件的 Selectable。计分公式兼顾了方向（dot product）和距离。
+**行为本质**：优先选"在目标方向上、且距离最近"的控件。
+
+两个实际会遇到的细节：
+
+- **参与计算的是 RectTransform 的边界，不是中心点**。所以一个很宽的按钮，从它左下方按"上"键，仍可能选中它——因为按边界算距离更近。
+- **支持环绕（wrap around）**：开启后，在最边缘继续按方向键会跳到反方向的最远端（列表尾 → 列表头）。这是 `Navigation` 上的可选项，不是默认行为。
+- **遍历的是场景中全部激活的 Selectable**，不做空间划分。界面上有几百个交互控件时，每次导航都是一次全量遍历——这也是 `s_Selectables` 用数组而非 `List` 的原因。
 
 ---
 
@@ -186,28 +222,24 @@ public virtual Selectable FindSelectable(Vector3 dir) {
 
 ### 全局 Selectable 列表
 
-场景中所有激活的 Selectable 被注册到静态列表 `s_List`：
+场景中所有激活的 Selectable 被注册到一个**静态数组**（不是 `List`）：
 
 ```csharp
-private static List<Selectable> s_List = new List<Selectable>();
-
-protected override void OnEnable() {
-    s_List.Add(this);
-    InternalEvaluateAndTransitionToSelectionState(true);  // 初始化视觉
-}
-
-protected override void OnDisable() {
-    s_List.Remove(this);
-    InstantClearState();  // 重置为 Normal 视觉状态
-}
+// Selectable.cs（main）
+protected static Selectable[] s_Selectables = new Selectable[10];
+protected static int s_SelectableCount = 0;
 ```
 
-`InstantClearState()` 将过渡状态重置为白色（ColorTint）、无 overrideSprite（SpriteSwap）、Normal 动画（Animation）。
+用定长数组 + 计数、按需扩容，而不是 `List<T>`——目的是让导航搜索（`FindSelectable`）遍历时零分配、零装箱。`OnEnable` 时把自己追加进数组并递增计数，`OnDisable` 时把末尾元素挪到自己的位置再递减计数（swap-remove，O(1)）。
+
+访问它用 `Selectable.allSelectablesArray` / `allSelectableCount`；`Selectable.allSelectables` 这个返回 `List` 的旧 API 已标记过时，因为它每次调用都要分配。
+
+`OnDisable` 还会调用 `InstantClearState()`，把过渡状态立即重置（ColorTint 重置为白色、SpriteSwap 清掉 `overrideSprite`、Animation 触发 Normal）——避免对象池复用时残留上一次的按下/高亮外观。
 
 ### IsInteractable——综合判断
 
 ```csharp
-public bool IsInteractable() {
+public virtual bool IsInteractable() {
     return m_GroupsAllowInteraction && m_Interactable;
 }
 ```
@@ -225,20 +257,35 @@ public bool IsInteractable() {
 最简单的子类，只添加了点击事件：
 
 ```csharp
+// Button.cs（main）
 public class Button : Selectable, IPointerClickHandler, ISubmitHandler {
     public ButtonClickedEvent onClick;
 
-    public void OnPointerClick(PointerEventData eventData) {
-        if (eventData.button != InputButton.Left) return;
+    public virtual void OnPointerClick(PointerEventData eventData) {
+        if (eventData.button != PointerEventData.InputButton.Left) return;
         Press();
     }
 
     private void Press() {
         if (!IsActive() || !IsInteractable()) return;
-        onClick.Invoke();
+
+        UISystemProfilerApi.AddMarker("Button.onClick", this);   // Profiler 采样点
+        m_OnClick.Invoke();
+    }
+
+    public virtual void OnSubmit(BaseEventData eventData) {
+        Press();                                    // 键盘/手柄 Submit 也走 Press
+        if (!IsActive() || !IsInteractable()) return;
+        DoStateTransition(SelectionState.Pressed, false);
+        StartCoroutine(OnFinishSubmit());           // 短暂显示按下态再恢复
     }
 }
 ```
+
+两点值得注意：
+
+- `Press()` 里的 `UISystemProfilerApi.AddMarker("Button.onClick", this)` —— **这就是你在 Profiler 里看到 `Button.onClick` 条目的来源**。onClick 回调里干了重活，会直接体现在这个采样点上。
+- `OnSubmit` 走的是同一个 `Press()`，但额外手动切到 Pressed 状态并起一个协程延时恢复——因为键盘提交没有"按下-抬起"的过程，不这么做就看不到按下反馈。
 
 ### Toggle
 
@@ -311,5 +358,11 @@ Slider.cs → IDragHandler 拖拽值变化
 
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
-| — | — | 全文 | — | **本章尚未做逐条源码核查。** 状态机、三种 Transition、导航算法等描述以 main `Selectable.cs` 的整体逻辑为依据，但文中的方法体均为简化示意，未逐行对照。引用具体签名前请自行回查 `UI/Core/Selectable.cs`。若发现不符，按仓库约定在此表追加「原文声称 / 实际情况」 |
+| 1 | 🔴 严重 | 13.1.1 / 13.1.2 | 「Selectable 定义了**四种**状态」，且「**Selected（选中）和 Highlighted（悬停）在视觉上使用相同的状态值**，两者没有视觉区别」 | `SelectionState` 有**五个**成员：`Normal / Highlighted / Pressed / Selected / Disabled`。`Selected` 是完全独立的状态——`ColorBlock.selectedColor`、`SpriteState.selectedSprite`、`AnimationTriggers.selectedTrigger` 三套资源都独立可配。之所以容易误判，是因为 `defaultColorBlock` 里 `selectedColor` 与 `highlightedColor` 的**默认值恰好都是 (245,245,245,255)**——默认撞车不等于同一状态。做手柄/键盘导航的项目必须区分这两者 |
+| 2 | 🔴 严重 | 13.1.2 | 状态判定在 `UpdateSelectionState()` 方法中，顺序为 Disabled → Pressed → `hasSelection` **→ Highlighted** → Normal | main 中是 `currentSelectionState` **属性**（无 `UpdateSelectionState()` 方法）；`hasSelection` 命中的是 **`SelectionState.Selected`** 而非 Highlighted。正确顺序：Disabled → Pressed → **Selected** → Highlighted → Normal |
+| 3 | 🟡 中等 | 13.1.3 | `DoStateTransition` 的 switch 只有 Normal / Highlighted / Pressed / Disabled 四个分支 | 有五个分支，缺 `Selected`。另外 ColorTint 分支实际传的是 `tintColor * colors.colorMultiplier`，原文省略了 `colorMultiplier` |
+| 4 | 🟡 中等 | 13.4 | 静态列表为 `private static List<Selectable> s_List`，`OnEnable` 用 `s_List.Add`、`OnDisable` 用 `s_List.Remove` | main 用**静态数组** `protected static Selectable[] s_Selectables = new Selectable[10]` + `s_SelectableCount` 计数，移除用 swap-remove（O(1)）。用数组而非 List 是为了让导航遍历零分配；返回 `List` 的 `allSelectables` 旧 API 已标记过时 |
+| 5 | 🟢 轻微 | 13.3 | `FindSelectable` 给出了具体打分公式 `dot / toTarget.sqrMagnitude`，并遍历 `s_List` | 真实实现基于 RectTransform 边界而非 `transform.position` 打分，另支持环绕（wrap around），细节比原文复杂。已改为结构示意并标注"非逐行照抄"，同时补充三条实际影响 |
+| 6 | 🟢 轻微 | 13.4 | `public bool IsInteractable()` | main 为 `public virtual bool IsInteractable()`（子类可重写） |
+| 7 | 🟢 轻微 | 13.5 | `Press()` 只调用 `onClick.Invoke()`；未提 `OnSubmit` | `Press()` 内含 `UISystemProfilerApi.AddMarker("Button.onClick", this)`——这是 Profiler 中 `Button.onClick` 条目的来源。另 `OnSubmit` 会手动切 Pressed 态并起协程恢复，原文完全未涉及 |
 
