@@ -10,10 +10,11 @@ UGUI 提供两种裁剪机制：
 
 | | Mask | RectMask2D |
 |------|------|------|
-| 底层机制 | GPU Stencil Buffer | CanvasRenderer 矩形裁剪 |
+| 底层机制 | GPU Stencil Buffer | `EnableRectClipping` + Shader 的 `_ClipRect` |
 | 裁剪形状 | 任意（由 Graphic 的 Alpha 决定） | 固定矩形 |
-| 断批 | 是（不同 Stencil 状态 = 不同材质实例） | 通常不断批 |
-| 性能代价 | GPU 片元阶段 + 材质实例化 | CPU 剔除 + CanvasRenderer 裁剪数据 |
+| 是否创建材质实例 | 是（`StencilMaterial.Add`） | **否** |
+| 断批 | 按 Stencil 参数组合分批：同深度子元素可合批，跨深度 / Mask 内外断批 | 按裁剪矩形分批：同一 RectMask2D 下可合批，不同 RectMask2D 之间断批 |
+| 性能代价 | GPU Stencil 读写 + 材质实例化 | CPU 每帧算裁剪矩形 + 片元阶段一次 clip 计算 |
 | 典型场景 | 圆形头像、不规则遮罩 | ScrollView、列表、规则裁剪区域 |
 
 本章自底向上讲：先分别剖析两种机制的底层实现，再对比性能影响，最后给出选择指南。
@@ -236,7 +237,16 @@ RectTransform 四个角的世界坐标
 
 **③ GPU 端**：
 
-被设置了裁剪矩形的 Graphic，GPU 在光栅化阶段只在矩形范围内输出片元。具体实现取决于图形后端——通常映射为硬件 Scissor Test（裁剪测试），其成本远低于 Stencil 的逐像素读写。
+被设置了裁剪矩形的 Graphic，其材质会被引擎写入 `_ClipRect` 并开启 `UNITY_UI_CLIP_RECT` 关键字。裁剪发生在**片元着色器内部**，不是固定功能管线的硬件 Scissor：
+
+```glsl
+// UI-Default.shader 片元阶段（节选）
+#ifdef UNITY_UI_CLIP_RECT
+color.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect);
+#endif
+```
+
+即：落在矩形外的像素被乘成 alpha=0，而不是被硬件提前剔除。成本是每像素一次矩形比较 —— 比 Stencil 的逐像素读写便宜，但**不是零成本，也不减少 Overdraw**（见 15.3.3）。
 
 **④ Transform 变化时的重新计算**：
 
@@ -254,8 +264,9 @@ RectMask2D **不会修改子节点的顶点数据，不会裁剪 Mesh**。子节
 
 - ✅ 顶点处理成本不增加（与无裁剪时相同）
 - ✅ UI 布局不受影响
-- ✅ Batch 结构通常可以保持（材质未变）
-- ✅ 片元填充区域减少（超出矩形的像素被丢弃）
+- ✅ **不产生材质实例** —— 同一个 RectMask2D 下的元素仍然共享原材质，彼此可以合批
+- ⚠️ 但**跨 RectMask2D 会断批** —— 裁剪矩形不同即渲染状态不同（见 15.3.2）
+- ⚠️ 片元**不会少跑** —— 超出矩形的像素依然执行完着色器，只是 alpha 被乘为 0（见 15.3.3）
 
 ### 15.2.2 关键代码逻辑
 
@@ -316,8 +327,8 @@ RectMask2D.PerformClipping()
 | 维度 | Mask | RectMask2D |
 |------|------|------|
 | 是否修改材质 | ✅ `StencilMaterial.Add()` 创建新材质实例 | ❌ 不修改材质 |
-| 裁剪判断地点 | GPU 片元阶段（逐像素 Stencil 测试） | CPU 阶段剔除 + GPU scissor/clip |
-| 对合批的影响 | 打断（不同材质实例不能合批） | 通常不断批（材质不变） |
+| 裁剪判断地点 | GPU 片元阶段（逐像素 Stencil 测试） | CPU 剔除完全在外的元素 + GPU 片元阶段 `_ClipRect` 比较 |
+| 对合批的影响 | 按 Stencil 参数组合分批（同深度可合批，跨深度断批） | 按裁剪矩形分批（同一 RectMask2D 内可合批，跨 RectMask2D 断批） |
 | 裁剪形状 | 任意（由 Alpha 决定） | 只能是矩形 |
 | 软遮罩（渐变边缘） | ✅（Alpha 半透明区域写入部分 Stencil） | ❌ |
 | 所需依赖 | Image+Mask 组件 | 仅 RectMask2D 组件 |
@@ -327,7 +338,8 @@ RectMask2D.PerformClipping()
 - **只能做矩形裁剪**——圆形头像、不规则遮罩、Alpha 通道裁剪全部无法支持
 - **旋转的 RectTransform 裁剪不精确**——裁剪矩形是轴对齐包围盒（AABB），旋转后实际形状可能是菱形或不规则四边形，但裁剪区域始终是矩形
 - **不同 Canvas 之间无法跨 Canvas 裁剪**——RectMask2D 仅影响同一 Canvas 内的子 Graphic
-- **不会减少 Overdraw**——超出裁剪区域的片元着色器照常执行，只在输出阶段被丢弃（与 Mask 的 Stencil 测试在此问题上是相同的）
+- **不会减少 Overdraw**——裁剪写在片元着色器内部，超出区域的像素照样跑完着色器，只是 alpha 被乘为 0（详见 15.3.3 的澄清）
+- **跨 RectMask2D 会断批**——不实例化材质不等于不断批，裁剪矩形本身就是渲染状态
 
 ---
 
@@ -351,21 +363,24 @@ N 层嵌套 Mask                         → 2N 个不同 Stencil 参数组合�
 
 ### 15.3.2 RectMask2D 对合批的影响
 
-RectMask2D 不修改材质——它只在 CanvasRenderer 上设置裁剪矩形：
+RectMask2D 不修改材质——它只在 CanvasRenderer 上设置裁剪矩形。但**裁剪矩形本身也是渲染状态**，所以"不实例化材质"不等于"完全不断批"：
 
-- **同一个 RectMask2D 内的多个 Graphic**：材质相同 → 可以合批
-- **RectMask2D 内和 RectMask2D 外的 Graphic**：材质相同 → 可以合批
+- **同一个 RectMask2D 内的多个 Graphic**：材质相同、裁剪矩形相同 → **可以合批** ✅
+- **分属两个不同 RectMask2D 的 Graphic**：裁剪矩形不同 → **断批** ❌（Frame Debugger 显示 `Different RectMask2D`）
+- **RectMask2D 内 vs 完全不受裁剪的 Graphic**：一个开了 `UNITY_UI_CLIP_RECT` 关键字、一个没开 → **断批** ❌
 
-这就是为什么 ScrollView 必须用 RectMask2D 而不是 Mask——列表中的几十个 Item 可以共享同一个 DrawCall，而 Mask 会把每个深度的元素都拆到不同的 Batch。
+> 以上为引擎侧行为，C# 无源码，依据 `UI-Default.shader` 的关键字定义与 Frame Debugger 观察（**行为推断**）。
+
+这就是为什么 ScrollView 用 RectMask2D 而不是 Mask：**列表里的几十个 Item 处在同一个裁剪矩形下，可以共享同一个 DrawCall**；换成 Mask 则会因 Stencil 参数把 Mask 内外拆开，而且每加一层嵌套再拆一次。RectMask2D 的代价是"每个裁剪区一个批次"，Mask 的代价是"每个 Stencil 深度一个批次 + 材质实例"——前者通常小得多，但都不是零。
 
 ### 15.3.3 全维度性能对比
 
 | 维度 | Mask | RectMask2D |
 |------|------|------|
-| **DrawCall** | 至少 +1（Mask Image）+ 内部按 Stencil 状态分裂 | 通常不增加 |
+| **DrawCall** | 至少 +1（Mask Image）+ 按 Stencil 状态分裂 | 按裁剪矩形分裂：一个 RectMask2D 一个批次边界 |
 | **CPU** | 低（一次性材质创建/缓存） | 中等（`ClipperRegistry.Cull()` 每帧计算裁剪矩形） |
-| **GPU 片元** | 高（Stencil 读写 + 比较，逐像素执行） | 极低（硬件 Scissor Test，固定功能管线） |
-| **FillRate** | 差——被遮挡像素跑完片元着色器后才做 Stencil 测试 | 同左——裁剪测试也在着色器之后 |
+| **GPU 片元** | 高（Stencil 读写 + 比较，逐像素执行） | 低（片元内一次矩形比较，无 Stencil 读写） |
+| **FillRate** | 不减少（见下方澄清） | 不减少（裁剪就发生在片元着色器内部） |
 | **内存** | 额外材质实例 + GPU Stencil Buffer | 无额外分配 |
 | **嵌套表现** | Batch 按深度分裂，越深越差 | 仅做矩形求交，性能稳定 |
 | **表达能力** | 任意形状 | 仅矩形 |
@@ -376,7 +391,12 @@ RectMask2D 的 CPU 开销高于 Mask（每帧计算裁剪矩形），但 GPU 开
 
 **关于 FillRate 的澄清**：
 
-> ⚠ Mask 和 RectMask2D 在被遮挡像素的处理上是**相同的**——被裁剪的像素仍然执行片元着色器，裁剪（Stencil 或 Scissor）发生在着色器之后。两者都不会减少 Overdraw。减少 Overdraw 需要靠减少 UI 元素重叠，裁剪系统解决的是"可见性"而非"着色器执行次数"。
+> ⚠ **两者都不能指望用来省 Overdraw**，但原因不同：
+>
+> - **RectMask2D 一定跑完片元着色器** —— 裁剪就写在着色器里（`color.a *= UnityGet2DClipping(...)`），被裁掉的像素是"算完之后 alpha 变 0"，不是"没算"。
+> - **Mask 的 Stencil 测试则要看硬件**：现代 GPU 支持 Early Stencil Test（在片元着色器之前拒绝），但当 Stencil 配置了写入操作（`Replace`）或着色器里有 `clip()/discard` 时可能失效。**不能一概说"Stencil 测试在片元着色器之后"**（详见第 18 章 18.4.3）。
+>
+> 结论不变：减少 Overdraw 要靠减少 UI 元素重叠，裁剪系统解决的是"可见性"，不是"着色器执行次数"。
 
 **移动平台的额外考量**：
 
@@ -473,10 +493,11 @@ Mask 系统
 │   └── 陷阱：被裁剪的像素仍可被 Raycast 检测到
 │
 └── RectMask2D（矩形裁剪）
-    ├── 机制：裁剪矩形计算 → IClippable.Cull() / SetClipRect() → CanvasRenderer.EnableRectClipping()
-    ├── 优点：不断批、GPU 开销极低（硬件 Scissor）、移动端友好
-    ├── 代价：每帧 CPU 裁剪计算、旋转时裁剪不精确、不支持不规则形状
-    └── 陷阱：编辑器运行流畅 ≠ 真机运行流畅
+    ├── 机制：裁剪矩形计算 → IClippable.Cull() / SetClipRect()
+    │         → CanvasRenderer.EnableRectClipping() → Shader 的 UNITY_UI_CLIP_RECT + _ClipRect
+    ├── 优点：不创建材质实例（同一裁剪区内可合批）、无 Stencil 读写、移动端友好
+    ├── 代价：每帧 CPU 裁剪计算、跨 RectMask2D 断批、旋转时裁剪不精确、不支持不规则形状
+    └── 陷阱：不实例化材质 ≠ 不断批；不减少 Overdraw；编辑器流畅 ≠ 真机流畅
 ```
 
 两者不是替代关系，是互补关系。选型的核心判断只有一个：**是否需要不规则形状？** 需要 → Mask，不需要 → RectMask2D。
@@ -497,3 +518,6 @@ Mask 系统
 | 6 | 🟢 轻微 | 14.2 | 原文将 Mask 和 RectMask2D 分两章，但第 14 章的性能对比内容（14.2）与第 13 章高度重叠 | 两章共用大量重复的 Stencil 讲解，且 14.2 性能对比的表格与第 13 章已有的对比结构基本重复 |
 | 7 | 🟢 轻微 | 14.3 | 大量使用场景小节（14.3.2~14.3.5）的核心论点重复——都是"能用 RectMask2D 就不用 Mask" | 各小节差异只在举例界面名称不同（商城/卡牌/技能树 vs 聊天/背包/排行榜），本质是同一论点的多次换皮 |
 | 8 | 🟢 轻微 | 15.1.5 / 15.3.1 | "Mask 的渲染阶段位置"与"Mask 对 Canvas 渲染阶段的插入位置" | 内容高度重叠——都在描述 Mask 在渲染管线中的位置 |
+| 9 | 🔴 严重 | 15.2.1③ / 15.3.3 | RectMask2D 的 GPU 裁剪"通常映射为硬件 Scissor Test（裁剪测试）""极低（硬件 Scissor Test，固定功能管线）" | 不是硬件 Scissor。裁剪在**片元着色器内部**完成：引擎写入材质的 `_ClipRect` 并开启 `UNITY_UI_CLIP_RECT` 关键字，着色器执行 `color.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect)`。依据引擎内置 `UI-Default.shader` |
+| 10 | 🔴 严重 | 15.2.3 / 15.3.2 / 概述表 / 本章总结 | RectMask2D「通常不断批」「RectMask2D 内和外的 Graphic 可以合批」 | 不创建材质实例 ≠ 不断批。裁剪矩形与关键字开关本身是渲染状态：**同一 RectMask2D 下可合批，跨 RectMask2D 断批**（行为推断，Frame Debugger 显示 `Different RectMask2D`）。第 09 章 9.4.4 / 第 20 章 20.1 的断批结论才是正确的一方 |
+| 11 | 🟡 中等 | 15.3.3 | 「被裁剪的像素仍然执行片元着色器，裁剪（Stencil 或 Scissor）发生在着色器之后」 | 对 RectMask2D 成立（裁剪就写在着色器里），对 Mask 不成立：Stencil 测试是否 Early 取决于 GPU 与配置，不能一概而论（见第 18 章 18.4.3）。结论「都不减少 Overdraw」不变，但理由需分开说 |

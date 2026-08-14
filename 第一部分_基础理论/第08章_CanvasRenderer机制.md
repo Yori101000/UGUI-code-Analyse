@@ -180,7 +180,7 @@ main 中 `Graphic` **不在 Awake 里主动获取** CanvasRenderer——通过�
 
 | Graphic 生命周期事件 | CanvasRenderer 操作 | 说明 |
 |---------------------|-------------------|------|
-| Awake | 获取 `GetComponent<CanvasRenderer>()` | 建立引用 |
+| 首次访问 `canvasRenderer` 属性 | `GetComponent` → 没有则 `AddComponent` | 惰性建立引用，**不在 Awake 中**（见 8.3.3） |
 | OnEnable | - | CanvasRenderer 自动启用 |
 | Rebuild(PreRender) | `SetMesh()` + `SetMaterial()` + `SetTexture()` | 数据更新 |
 | OnDisable | `Clear()` | 释放引用，避免残留 |
@@ -254,10 +254,10 @@ public extern Material GetMaterial(int index);
 
 ### 8.4.4 C# 侧封装的属性
 
-除了 Native 方法，CanvasRenderer 也在 C# 侧封装了一些属性，这些属性完全由 C# 管理，不涉及 Native 同步：
+除了上面这些方法，CanvasRenderer 还暴露了一组属性。注意它们**同样由引擎侧维护**——C# 只是读写入口，真实状态存在 Native 侧（与 8.4.2 的结论一致）：
 
 ```csharp
-// 由 C# 侧管理的属性
+// C# 侧可读写，实际状态由引擎维护
 public bool cull { get; set; }              // 是否剔除渲染（RectMask2D 使用）
 public int absoluteDepth { get; }            // 用于排序的深度值
 public int materialCount { get; set; }       // 材质数量（多材质支持）
@@ -280,7 +280,7 @@ public void EnableRectClipping(Rect clipRect);
 public void DisableRectClipping();
 ```
 
-`EnableRectClipping` 接收一个 `Rect` 参数（裁剪矩形），然后在渲染时只显示该矩形区域内的像素。这个裁剪是在 Native 侧的渲染阶段执行的，**不修改 Mesh 顶点数据**。
+`EnableRectClipping` 接收一个 `Rect` 参数（裁剪矩形），设置后该 CanvasRenderer 提交的内容只在矩形区域内可见。**它不修改 Mesh 顶点数据**——裁剪由 UI Shader 完成：引擎把矩形传给材质的 `_ClipRect`，并开启 `UNITY_UI_CLIP_RECT` 关键字，片元阶段执行 `color.a *= UnityGet2DClipping(worldPosition.xy, _ClipRect)`（见第 18 章）。
 
 ### 8.5.2 与 RectMask2D 的关系
 
@@ -301,7 +301,7 @@ public void PerformClipping()
 }
 ```
 
-与 Mask（基于 Stencil Buffer）不同，RectMask2D 基于 CanvasRenderer 的矩形裁剪，**不断批**——这是它的核心性能优势。
+与 Mask（基于 Stencil Buffer）不同，RectMask2D **不创建任何材质实例**——这是它的核心性能优势。但"不创建材质实例"不等于"不断批"：裁剪矩形与 `UNITY_UI_CLIP_RECT` 关键字本身也是渲染状态，**同一裁剪矩形下的元素可以合批，分属不同 RectMask2D 的元素之间仍会断批**（Frame Debugger 显示 `Different RectMask2D`）。完整对比见第 15 章。
 
 ### 8.5.3 SetClipping
 
@@ -357,8 +357,8 @@ public int materialCount { get; set; }
 ```
 创建阶段：
   1. GameObject 实例化（new GameObject 或 Instantiate 预制体）
-  2. CanvasRenderer 自动添加（UGUI 内部逻辑）
-  3. Graphic.Awake() → GetComponent<CanvasRenderer>() 建立引用
+  2. Graphic 首次访问 canvasRenderer 属性
+       → GetComponent<CanvasRenderer>()，没有则 AddComponent（惰性，见 8.3.3）
 
 启用阶段：
   4. CanvasRenderer.enabled = true
@@ -464,3 +464,6 @@ Graphic 持有 CanvasRenderer 的引用，但 CanvasRenderer 不持有 Graphic �
 | 2 | 🟡 | 8.3.2 | `canvasRenderer.SetMaterial(material, 0)` | main 使用经过 `IMaterialModifier` 链的 `materialForRendering`，并先设置 `materialCount = 1` |
 | 3 | 🟡 | 8.3.3 | `Graphic` 在 `Awake` 中获取 `CanvasRenderer` 引用 | main 用惰性 `canvasRenderer` 属性，首次访问时 `GetComponent` / `AddComponent` |
 | 4 | 🟡 | 8.2.1 / 8.8.1 | CanvasRenderer 位于 `UnityEngine.CoreModule` | 属 `UnityEngine.UIModule` |
+| 5 | 🟡 | 8.3.4 / 8.7 | 生命周期表与创建阶段仍写「Awake → `GetComponent<CanvasRenderer>()` 建立引用」 | 与 8.3.3 及 main 一致：惰性 `canvasRenderer` 属性，首次访问时才 `GetComponent`/`AddComponent`。此处是勘误 #3 修正时的遗漏 |
+| 6 | 🟡 | 8.4.4 | `cull` / `absoluteDepth` / `materialCount` 等属性「完全由 C# 管理，不涉及 Native 同步」 | 均为引擎侧属性，C# 只是读写入口，真实状态在 Native 侧——与 8.4.2 的结论一致 |
+| 7 | 🔴 | 8.5.2 | RectMask2D「**不断批**——这是它的核心性能优势」 | 不创建材质实例 ≠ 不断批。裁剪矩形与 `UNITY_UI_CLIP_RECT` 关键字本身是渲染状态：同一裁剪矩形内可合批，不同 RectMask2D 之间断批（行为推断，Frame Debugger 显示 `Different RectMask2D`）。全书统一口径见第 15 章 |

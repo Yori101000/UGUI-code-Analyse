@@ -225,7 +225,7 @@ public class Canvas : Behaviour
     public RenderMode renderMode;      // Overlay / Camera / WorldSpace
     public int sortingOrder;           // Order in Layer（Inspector中配置）
     public int sortingLayerID;         // Sorting Layer的ID
-    public int cached SortingLayerValue; // 引擎缓存的排序层值
+    public int cachedSortingLayerValue; // 引擎缓存的排序层值（只读）
 
     // Camera模式专属
     public Camera worldCamera;         // 绑定的Camera
@@ -434,9 +434,11 @@ namespace UnityEngine
         [NativeMethod] private extern void SendWillRenderCanvases();
 
         // ===== 静态事件 =====
-        public static event Action<float> willRenderCanvases;
-        public static event Action<float> preWillRenderCanvases;
-        // 渲染前的回调事件，CanvasScaler等依赖此事件执行
+        // 委托是无参的：public delegate void WillRenderCanvases();
+        public static event WillRenderCanvases willRenderCanvases;
+        public static event WillRenderCanvases preWillRenderCanvases;
+        // 渲染前的回调事件，CanvasUpdateRegistry / CanvasScaler 依赖它驱动
+        // 用法见第 4 章 4.2.1（+= PerformUpdate）与第 21 章 21.4.1
     }
 }
 ```
@@ -678,15 +680,18 @@ public enum AdditionalCanvasShaderChannels
 
 ### 6.9.3 带宽成本
 
-| 配置 | 单顶点大小 | 1万顶点 Canvas |
-|------|-----------|---------------|
-| None（pos+color+uv0） | 32B | 320KB |
-| +TexCoord1 | 48B (+50%) | 480KB |
-| +TexCoord2 | 64B (+100%) | 640KB |
-| +Normal | 76B | 760KB |
-| +Tangent | 92B (+188%) | 920KB |
+开启额外通道会按比例增加送往 GPU 的顶点数据量：
 
-按需开启，避免不必要带宽浪费。
+| 配置 | 相对基线的顶点数据量 |
+|------|---------------|
+| None（position + color + uv0） | 基线 |
+| +TexCoord1 | 约 +1/3 |
+| +TexCoord2 | 约 +2/3 |
+| +Normal / +Tangent | 再各增一档（Tangent 是 4 个 float，比 Normal 更贵） |
+
+> 这里只给相对量级：单顶点的实际字节数取决于各通道的分量数与引擎的顶点布局对齐方式，不同 Unity 版本可能不同，需要精确数值时以 Frame Debugger 中该批次的 Vertex Buffer 大小为准。
+
+按需开启，避免不必要的带宽浪费。
 
 ### 6.9.4 最佳实践
 
@@ -747,3 +752,6 @@ Canvas不是"UI组件的容器"这么简单——它是UGUI中**唯一具备渲�
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
 | 1 | 🟡 | 6.3 | `RenderMode` 枚举"定义在 UGUI 源码中" | 引擎侧 `UnityEngine.RenderMode`（`UnityEngine.UIModule`），不在 uGUI 仓库 |
+| 2 | 🟡 中等 | 6.6.1 | `public static event Action<float> willRenderCanvases;` | 委托无参（`public delegate void WillRenderCanvases();`）。第 4 章 4.2.1（`+= PerformUpdate`）与第 21 章 21.4.1（`+= OnWillRenderCanvases`）的无参用法才是正确的 |
+| 3 | 🟢 轻微 | 6.4.1 | `public int cached SortingLayerValue;` | 标识符中间多了空格，非法 C#；正确为 `cachedSortingLayerValue`（6.6.1 处写法无误） |
+| 4 | 🟢 轻微 | 6.9.3 | 带宽表给出 None=32B / +TexCoord1=48B / +TexCoord2=64B 等绝对字节数 | 未说明计算口径（分量数、对齐方式），且与 position(12)+color(4)+uv0(8)=24B 对不上。已改为相对量级，精确值以 Frame Debugger 的 Vertex Buffer 为准 |

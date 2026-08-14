@@ -204,7 +204,9 @@ Mask 外侧的 UI（Stencil Ref=0, Comp=Always）    ← 回到 Batch A（如果
 
 ### 9.4.4 RectMask2D 裁剪状态变化
 
-RectMask2D 通过修改顶点位置实现裁剪（与 Mask 的 Stencil 方案不同），但不同的 RectMask2D 区域也会导致合批中断。即便两个 UI 元素使用相同的材质和纹理，如果它们分别位于两个不同的 RectMask2D 下，也无法合并到同一个 DrawCall。
+RectMask2D 的裁剪方式与 Mask 完全不同：它**既不用 Stencil，也不修改顶点**。`RectMask2D` 通过 `IClippable.SetClipRect()` 通知子 Graphic，后者调用 `canvasRenderer.EnableRectClipping(rect)`；GPU 侧由 UI Shader 的 `UNITY_UI_CLIP_RECT` 关键字 + `_ClipRect` 在片元阶段裁剪（见第 15 章 15.2、第 18 章）。完全落在裁剪区外的元素则走 `Cull()` → `canvasRenderer.cull = true`，直接不提交。
+
+不创建材质实例，但**裁剪矩形和关键字开关本身是渲染状态**：即便两个 UI 元素使用相同的材质和纹理，如果分别位于两个不同的 RectMask2D 下（裁剪矩形不同），也无法合并到同一个 DrawCall。同一个 RectMask2D 下的元素之间则可以正常合批——这是它与 Mask 的关键差异。
 
 ### 9.4.5 跨 Canvas
 
@@ -396,3 +398,4 @@ UI 侧对照：Graphic.materialForRendering / GetModifiedMaterial、StencilMater
 | # | 严重程度 | 章节 | 原文声称 | 实际情况 |
 |---|---------|------|---------|---------|
 | 1 | 🔴 | 9.3.5 | UGUI 通过 `Graphic.GetModifiedMesh()` 计算需要哪些顶点通道 | main 中不存在该方法；顶点布局由 `Canvas.additionalShaderChannels` 统一声明，`VertexHelper.FillMesh` 固定按 9 通道写入 |
+| 2 | 🔴 | 9.4.4 | 「RectMask2D 通过**修改顶点位置**实现裁剪」 | 不改顶点：`SetClipRect()` → `canvasRenderer.EnableRectClipping()`，GPU 侧由 `UNITY_UI_CLIP_RECT` + `_ClipRect` 在片元阶段裁剪；完全在区外的元素走 `Cull()` 置 `canvasRenderer.cull`。断批结论本身正确，仅机制描述有误。全书统一口径见第 15 章 |

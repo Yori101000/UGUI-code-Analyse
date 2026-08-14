@@ -181,7 +181,7 @@ com.unity.ugui/
 **核心概念 → 源码映射**
 
 - `Canvas.renderMode` 决定 UI 走哪条渲染路径；SRP 下 UI 仍由 Canvas 系统批处理提交。
-- UI Shader 关键点：`Cull Off`、`Blend One OneMinusSrcAlpha`、`ZTest [unity_GUIZTestMode]`、`Stencil` 块。
+- UI Shader 关键点：`Cull Off`、`ZWrite Off`、`Blend SrcAlpha OneMinusSrcAlpha`、`ZTest [unity_GUIZTestMode]`、`Stencil` 块、`UNITY_UI_CLIP_RECT` 关键字（RectMask2D 的裁剪实现）。
 
 **阅读路径**：BuiltinShaders 的 `UI-Default.shader` → Graphics 仓库中 URP 的 Canvas 支持代码。
 
@@ -252,10 +252,13 @@ com.unity.ugui/
 | `UI/Core/Mask.cs` | Stencil 裁剪：`GetModifiedMaterial` 注入 stencil 状态 |
 | `UI/Core/RectMask2D.cs` | 矩形裁剪：`EnableRectClipping`（CanvasRenderer 侧） |
 | `UI/Core/StencilMaterial.cs` | 按 stencil 参数缓存/创建材质副本 |
-| `UI/Core/MaskUtilities.cs` | Stencil 深度分配（最多 8 层） |
+| `UI/Core/MaskUtilities.cs` | `GetStencilDepth()`：遍历 `transform.parent` 统计 Mask 嵌套深度 |
 | `UI/Core/Culling/ClipperRegistry.cs`、`IClippable.cs` / `IClipper.cs` | 裁剪矩形收集与 `Cull()` |
 
-**核心概念 → 源码映射**：`Mask`（Stencil，断批）vs `RectMask2D`（矩形裁剪，不断批但影响批处理边界）。
+**核心概念 → 源码映射**（全书统一口径）：
+
+- `Mask`：走 Stencil。`GetModifiedMaterial` → `StencilMaterial.Add()` 生成带 Stencil 参数的材质副本。**同一 Stencil 参数组合共享同一材质实例，同深度子元素之间可以合批**；不同深度 / Mask 内外之间断批。
+- `RectMask2D`：**不走 Stencil、不改顶点、不创建材质实例**。`SetClipRect()` → `MaskableGraphic` → `canvasRenderer.EnableRectClipping(rect)`，GPU 侧由 `UI-Default.shader` 的 `UNITY_UI_CLIP_RECT` 关键字 + `_ClipRect` 在片元阶段裁剪；完全在裁剪区外的元素走 `Cull()` → `canvasRenderer.cull = true`。**同一裁剪矩形下的元素可合批；分属不同 RectMask2D 的元素之间会断批**（行为推断，Frame Debugger 显示 `Different RectMask2D`）。
 
 **阅读路径**：`Mask.cs` → `StencilMaterial.cs` → `RectMask2D.cs` → `ClipperRegistry.cs`。
 
@@ -273,7 +276,7 @@ com.unity.ugui/
 **核心概念 → 源码映射**
 
 - 动态字体：`Font.RequestCharactersInTexture` → 引擎栅格化 → `Font.textureRebuilt` 事件 → `FontUpdateTracker` 通知 Text 重建。
-- TMP：SDF 图集 + 字符缓存，`uv2` 传 SDF 参数（需开启 Canvas 的 `additionalShaderChannels` 的 TexCoord1）。
+- TMP：SDF 图集 + 字符缓存，`uv2` 传 SDF 参数（需开启 Canvas 的 `additionalShaderChannels` 的 **TexCoord2**）。
 
 **阅读路径**：`Text.cs OnPopulateMesh` → `FontUpdateTracker.cs` → TMP 包 `TMP_Text.cs`。
 
@@ -296,7 +299,7 @@ com.unity.ugui/
 
 **核心概念 → 源码映射**
 
-- `UI/Default` 关键块：`Blend One OneMinusSrcAlpha`、`Cull Off`、`ZTest [unity_GUIZTestMode]`、`Stencil` 块由 `unity_UI*` 属性驱动。
+- `UI/Default` 关键块：`Blend SrcAlpha OneMinusSrcAlpha`、`Cull Off`、`ZWrite Off`、`ZTest [unity_GUIZTestMode]`、`Stencil` 块由 Material 的 `_Stencil*` 属性驱动、`UNITY_UI_CLIP_RECT` / `UNITY_UI_ALPHACLIP` 两个 multi_compile 关键字。
 - `CanvasRenderer` 传入的顶点通道：Position/Color/TexCoord0（+ additionalShaderChannels 的额外通道）。
 
 **阅读路径**：打开安装目录 `UI-Default.shader` 逐段对照第 18 章表格。

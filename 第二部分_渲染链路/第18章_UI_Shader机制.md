@@ -40,7 +40,7 @@ UI Shader 和普通 3D Shader 的核心区别：
 
 UGUI 中所有 Image、Text、RawImage，在未指定自定义材质时，最终都使用 `UI/Default` Shader。它不追求视觉效果——它追求的是**稳定适配整个 Canvas 渲染体系**。
 
-直接看完整代码逐行拆解：
+下面是它的主体结构（省略了 GPU Instancing / 单通道立体渲染的宏，其余与引擎内置版本一致）：
 
 ```glsl
 Shader "UI/Default"
@@ -49,6 +49,16 @@ Shader "UI/Default"
     {
         [PerRendererData] _MainTex ("Sprite Texture", 2D) = "white" {}
         _Color ("Tint", Color) = (1,1,1,1)
+
+        _StencilComp ("Stencil Comparison", Float) = 8
+        _Stencil ("Stencil ID", Float) = 0
+        _StencilOp ("Stencil Operation", Float) = 0
+        _StencilWriteMask ("Stencil Write Mask", Float) = 255
+        _StencilReadMask ("Stencil Read Mask", Float) = 255
+
+        _ColorMask ("Color Mask", Float) = 15
+
+        [Toggle(UNITY_UI_ALPHACLIP)] _UseUIAlphaClip ("Use Alpha Clip", Float) = 0
     }
 
     SubShader
@@ -56,7 +66,9 @@ Shader "UI/Default"
         Tags
         {
             "Queue"="Transparent"
+            "IgnoreProjector"="True"
             "RenderType"="Transparent"
+            "PreviewType"="Plane"
             "CanUseSpriteAtlas"="True"
         }
 
@@ -74,13 +86,21 @@ Shader "UI/Default"
         ZWrite Off
         ZTest [unity_GUIZTestMode]
         Blend SrcAlpha OneMinusSrcAlpha
+        ColorMask [_ColorMask]
 
         Pass
         {
+            Name "Default"
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #include "UnityUI.cginc"
+            #pragma target 2.0
+
+            #include "UnityCG.cginc"      // UnityObjectToClipPos / TRANSFORM_TEX
+            #include "UnityUI.cginc"      // UnityGet2DClipping
+
+            #pragma multi_compile_local _ UNITY_UI_CLIP_RECT
+            #pragma multi_compile_local _ UNITY_UI_ALPHACLIP
 
             struct appdata_t
             {
@@ -91,27 +111,40 @@ Shader "UI/Default"
 
             struct v2f
             {
-                float4 vertex   : SV_POSITION;
-                fixed4 color    : COLOR;
-                float2 texcoord : TEXCOORD0;
+                float4 vertex       : SV_POSITION;
+                fixed4 color        : COLOR;
+                float2 texcoord     : TEXCOORD0;
+                float4 worldPosition: TEXCOORD1;   // 供 _ClipRect 判断用
             };
 
             sampler2D _MainTex;
-            float4 _MainTex_ST;
-            fixed4 _Color;
+            float4    _MainTex_ST;
+            fixed4    _Color;
+            fixed4    _TextureSampleAdd;   // 字体等 Alpha-only 纹理的补偿
+            float4    _ClipRect;           // RectMask2D 写入的裁剪矩形
 
-            v2f vert(appdata_t IN)
+            v2f vert(appdata_t v)
             {
                 v2f OUT;
-                OUT.vertex = UnityObjectToClipPos(IN.vertex);
-                OUT.texcoord = TRANSFORM_TEX(IN.texcoord, _MainTex);
-                OUT.color = IN.color * _Color;
+                OUT.worldPosition = v.vertex;
+                OUT.vertex   = UnityObjectToClipPos(OUT.worldPosition);
+                OUT.texcoord = TRANSFORM_TEX(v.texcoord, _MainTex);
+                OUT.color    = v.color * _Color;
                 return OUT;
             }
 
             fixed4 frag(v2f IN) : SV_Target
             {
-                fixed4 color = tex2D(_MainTex, IN.texcoord) * IN.color;
+                half4 color = (tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd) * IN.color;
+
+                #ifdef UNITY_UI_CLIP_RECT
+                color.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect);
+                #endif
+
+                #ifdef UNITY_UI_ALPHACLIP
+                clip (color.a - 0.001);
+                #endif
+
                 return color;
             }
             ENDCG
@@ -196,10 +229,44 @@ UI 的 Vertex Shader 只做三件事：坐标变换、UV 传递、颜色传递�
 **⑩ Fragment Shader 核心**
 
 ```glsl
-fixed4 color = tex2D(_MainTex, IN.texcoord) * IN.color;
+half4 color = (tex2D(_MainTex, IN.texcoord) + _TextureSampleAdd) * IN.color;
 ```
 
-**UGUI 的 Fragment Shader 核心逻辑就这一行。** 采样贴图 → 乘上顶点颜色 → 输出。所有复杂的视觉效果（Mask 裁剪、描边、阴影、渐变）要么在 CPU 侧 ModifyMesh 中修改了顶点数据，要么在 Shader 的 Stencil/Blend 阶段处理。
+采样贴图 → 加 `_TextureSampleAdd` → 乘顶点颜色。`_TextureSampleAdd` 是给 **Alpha-only 纹理**（旧版字体图集）用的补偿量：这类纹理的 RGB 全是 0，引擎会把它设成 `(1,1,1,0)`，让最终颜色完全由顶点色决定；普通 Sprite 走的是默认值 0，等价于不加。
+
+**⑪ `_ClipRect` 与 `UNITY_UI_CLIP_RECT` —— RectMask2D 的真身**
+
+```glsl
+#ifdef UNITY_UI_CLIP_RECT
+color.a *= UnityGet2DClipping(IN.worldPosition.xy, _ClipRect);
+#endif
+```
+
+这三行就是 **RectMask2D 的全部裁剪实现**。链路是：
+
+```
+RectMask2D 计算裁剪矩形
+  → IClippable.SetClipRect() → MaskableGraphic
+    → canvasRenderer.EnableRectClipping(rect)
+      → 引擎写入材质的 _ClipRect，并开启 UNITY_UI_CLIP_RECT 关键字
+        → 片元阶段：矩形外的像素 alpha 被乘为 0
+```
+
+三个由此推出的重要结论（与第 15 章一致）：
+
+1. **RectMask2D 不改顶点、不建材质实例** —— 它只是让引擎给材质塞了个矩形加开了个关键字。
+2. **但它会断批** —— 裁剪矩形不同、或关键字一开一关，都是不同的渲染状态。所以"同一个 RectMask2D 下可以合批，跨 RectMask2D 断批"。
+3. **它不减少 Overdraw** —— 裁剪写在片元着色器**内部**，被裁掉的像素是"算完之后 alpha 变 0"，着色器一次都没少跑。
+
+`IN.worldPosition` 这个插值量存在的唯一理由就是它：顶点着色器把未变换的顶点位置原样传下来，片元阶段才能拿它和 `_ClipRect` 比较。
+
+**⑫ `ColorMask [_ColorMask]`**
+
+控制写入哪些颜色通道，默认 15（RGBA 全写）。Mask 组件在 `showMaskGraphic = false` 时把它设为 0——**只写 Stencil、不写颜色**，这就是"遮罩图片本身不可见但裁剪照常生效"的实现方式。
+
+**⑬ 剩下的复杂效果去哪了**
+
+Fragment Shader 的主干就是上面这些。描边、阴影、渐变这些效果不在这里——它们要么在 CPU 侧被 `ModifyMesh` 写进了顶点数据（第 17 章），要么由自定义 Shader 替换掉整个 Pass（第 19 章）。
 
 ---
 
@@ -221,9 +288,9 @@ VertexHelper.AddVert(position, color, uv)
 ModifyMesh 链修改 VertexHelper 中的顶点
       ↓
 VertexHelper.FillMesh(mesh)
-  → Mesh.vertices    = UIVertex.position
-  → Mesh.colors32    = UIVertex.color
-  → Mesh.uv          = UIVertex.uv0
+  → SetVertexBufferParams(count, 9 通道布局)   // Position/Normal/Tangent/Color/TexCoord0~4
+  → SetVertexBufferData(m_Verts, ...)          // 单流一次性上传，无逐通道搬运
+  → SetIndexBufferData(m_Indices, UInt16)
       ↓
 CanvasRenderer.SetMesh(mesh)
       ↓
@@ -425,6 +492,9 @@ Shader "UI/CustomEffect"
             #pragma vertex vert
             #pragma fragment frag
 
+            #include "UnityCG.cginc"   // 必须：UnityObjectToClipPos / TRANSFORM_TEX
+            #include "UnityUI.cginc"   // 需要支持 RectMask2D 时必须：UnityGet2DClipping
+
             struct appdata_t
             {
                 float4 vertex   : POSITION;
@@ -470,10 +540,13 @@ Shader "UI/CustomEffect"
 
 | 配置 | 原因 |
 |------|------|
+| `#include "UnityCG.cginc"` | `UnityObjectToClipPos` / `TRANSFORM_TEX` 都在这里，**漏掉直接编译失败** |
 | `CanUseSpriteAtlas=True` | 确保 SpriteAtlas 系统识别你的 Shader |
 | `ZWrite Off` | UI 不写深度，否则遮挡关系错误 |
 | `Blend SrcAlpha OneMinusSrcAlpha` | UI 需要透明混合 |
 | `Cull Off` | UI 2D 平面可能需要双面可见 |
+| `Stencil` 块 + `_Stencil*` 属性 | 不保留则该 UI 无法被 Mask 裁剪 |
+| `_ClipRect` + `UNITY_UI_CLIP_RECT` 分支 | 不保留则该 UI **不会被 RectMask2D 裁剪**（放进 ScrollView 会溢出显示） |
 
 **顶点颜色乘法的保留**：`tex2D(...) * IN.color` 这行必须保留或用类似方式处理顶点颜色，否则 `Graphic.color`、`CanvasGroup` 的透明度调整、Text 字体颜色等功能全部失效。
 
@@ -555,3 +628,6 @@ Fragment Shader 核心：return tex2D(_MainTex, IN.uv) * IN.color;
 | 3 | 🟢 轻微 | 18.1 / 18.2 | UI Shader 结构（18.1）与 Default UI Shader 解析（18.2）内容高度重复 | 两者在 Transparent Queue、ZWrite Off、Blend、顶点颜色、顶点输入结构、Fragment 核心逻辑上完全重复。18.2 只是用 Default UI Shader 作为示例把 18.1 又讲了一遍 |
 | 4 | 🟢 轻微 | 18.5（Stencil 全节）与第 15 章 | Stencil Buffer 写入/测试/嵌套 Mask/位运算概念 | 内容与第 13 章几乎完全重叠。本章应侧重 Shader 代码层面的 Stencil 参数传递实现 |
 | 5 | 🟢 轻微 | 18.6 全节 | UI vs 3D Shader 差异 11 个小节 | 每个差异点在前文均已隐含说明，属汇总性重复 |
+| 6 | 🔴 严重 | 18.1 | 号称「直接看**完整代码**逐行拆解」，但缺 `_ClipRect`、`_TextureSampleAdd`、`_ColorMask`、`_UseUIAlphaClip` 四个属性，缺 `UNITY_UI_CLIP_RECT` / `UNITY_UI_ALPHACLIP` 两个关键字，缺 `worldPosition` 插值量与片元里的裁剪分支 | **缺掉的正好是 RectMask2D 的实现机制**，这也是全书对 RectMask2D 说法混乱的源头之一。已补全并新增 ⑪⑫⑬ 三段解析 |
+| 7 | 🟡 中等 | 18.1 / 18.5 及第 19 章全部 Shader | 只 `#include "UnityUI.cginc"`，却使用 `UnityObjectToClipPos` / `TRANSFORM_TEX` / `appdata_base` | 这些来自 `UnityCG.cginc`，缺它**无法编译**。引擎内置 `UI-Default.shader` 两个都 include，已统一补上 |
+| 8 | 🟡 中等 | 18.2 | `FillMesh` 链路写作 `Mesh.vertices = ... / colors32 = ... / uv = ...` 逐通道赋值 | main 为 `SetVertexBufferParams`（9 通道）+ 单次 `SetVertexBufferData` 单流上传，与第 2 章 2.7.5 对齐 |

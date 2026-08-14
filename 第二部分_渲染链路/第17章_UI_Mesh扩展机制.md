@@ -191,16 +191,21 @@ public override void ModifyMesh(VertexHelper vh)
     var verts = ListPool<UIVertex>.Get();   // 与 main 的 Outline.cs 一致
     vh.GetUIVertexStream(verts);
 
-    int originalCount = verts.Count;
+    // 每次 ApplyShadow 都从 start 复制到当前末尾，并把 start 推到新的末尾，
+    // 这样四次复制各自只处理"原始那一批"，不会复制到自己刚追加的顶点
+    int start = 0;
+    int end = verts.Count;
 
-    // 四个方向各复制一次
-    ApplyShadow(verts, effectColor, startIndex, verts.Count,
+    ApplyShadow(verts, effectColor, start, verts.Count,
         effectDistance.x, -effectDistance.y);  // 下
-    ApplyShadow(verts, effectColor, startIndex, verts.Count,
+    start = end; end = verts.Count;
+    ApplyShadow(verts, effectColor, start, verts.Count,
         -effectDistance.x, effectDistance.y);  // 上
-    ApplyShadow(verts, effectColor, startIndex, verts.Count,
+    start = end; end = verts.Count;
+    ApplyShadow(verts, effectColor, start, verts.Count,
         effectDistance.x, effectDistance.y);   // 右
-    ApplyShadow(verts, effectColor, startIndex, verts.Count,
+    start = end; end = verts.Count;
+    ApplyShadow(verts, effectColor, start, verts.Count,
         -effectDistance.x, -effectDistance.y); // 左
 
     vh.Clear();
@@ -224,7 +229,7 @@ public override void ModifyMesh(VertexHelper vh)
 | Image（4 顶点） | 4 | 8 | 20 |
 | Text 100 字（400 顶点） | 400 | 800 | 2000 |
 | Text 1000 字（4000 顶点） | 4000 | 8000 | 20000 |
-| 1000 字 + Outline + Shadow | 4000 | 8000 | **28000** |
+| 1000 字 + Shadow + Outline | 4000 | 8000（×2） | **40000**（8000 ×5） |
 
 这就是为什么移动端项目通常禁止 Text 使用 Outline——文本本身就几千顶点，Outline 的 ×5 乘法效应直接爆炸。而且所有顶点都在 CPU 侧处理完才上传 GPU，重建时的 CPU 开销、GC 压力、上传带宽都会放大。
 
@@ -349,3 +354,5 @@ IMeshModifier.cs → BaseMeshEffect.cs → Shadow.cs → Outline.cs → Position
 | 6 | 🔴 严重 | 17.1.3 / 17.3.2 | UIVertex 是 8 个字段、约 52 字节 | Unity 6 / main 为 9 个字段（含 `prevPosition`），共 124 字节，IL2CPP 对齐后约 128 字节 |
 | 7 | 🟡 中等 | 17.1.2 | 继承 BaseMeshEffect 时必须在 OnEnable 手动调用 `SetVerticesDirty()` | `BaseMeshEffect` 已自动处理；只需保留 `base.OnEnable()`。直接实现 `IMeshModifier` 才需要自己通知 |
 | 8 | 🟡 中等 | 17.1.3 / 17.3.3 | 优化方案为缓存成员 `List<UIVertex>` | main 官方写法是 `ListPool<UIVertex>.Get()/Release()`（Shadow/Outline 即如此），成员字段缓存只是替代方案 |
+| 9 | 🟢 轻微 | 17.2.2 表格 | 1000 字 + Outline + Shadow = **28000** 顶点 | 按本章 17.2.3③ 自述的乘法规则，两种叠加顺序都得 **40000**（4000 ×2 ×5）；第 20 章 20.4 给的也是 40000。28000 无法由文中任何规则推出，已更正 |
+| 10 | 🟢 轻微 | 17.2.2 代码 | Outline 示例使用了从未声明的 `startIndex` | 已改为显式维护 `start` / `end` 的写法，并说明为什么每轮要推进起点（避免复制到自己刚追加的顶点） |
